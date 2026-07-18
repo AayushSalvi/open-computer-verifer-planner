@@ -1,0 +1,51 @@
+{
+  "task_id": "vscode_keybindings_and_settings_combo",
+  "app": "vscode",
+  "checkpoints": [
+    {
+      "id": "m1_fontsize",
+      "description": "editor.fontSize is 14 in user settings.json",
+      "channel": "file",
+      "command": "check-setting editor.fontSize 14",
+      "key": "match",
+      "expected": true
+    },
+    {
+      "id": "m2_tabsize",
+      "description": "editor.tabSize is 4 in user settings.json",
+      "channel": "file",
+      "command": "check-setting editor.tabSize 4",
+      "key": "match",
+      "expected": true
+    },
+    {
+      "id": "m3_cursorstyle",
+      "description": "editor.cursorStyle is block in user settings.json",
+      "channel": "file",
+      "command": "check-setting editor.cursorStyle block",
+      "key": "match",
+      "expected": true
+    },
+    {
+      "id": "m4_kb_newfile",
+      "description": "ctrl+shift+n is bound to workbench.action.files.newUntitledFile on the same binding entry (stricter than the outcome verifier, see checkpoints.md)",
+      "channel": "file",
+      "command": "keybindings",
+      "eval": "any(isinstance(b, dict) and str(b.get('key', '')).lower() == 'ctrl+shift+n' and str(b.get('command', '')).lower() == 'workbench.action.files.newuntitledfile' for b in (result if isinstance(result, list) else []))"
+    },
+    {
+      "id": "m5_kb_closeall",
+      "description": "ctrl+shift+w is bound to workbench.action.closeAllEditors on the same binding entry (outcome verifier checks key existence only, no command check at all for this milestone)",
+      "channel": "file",
+      "command": "keybindings",
+      "eval": "any(isinstance(b, dict) and str(b.get('key', '')).lower() == 'ctrl+shift+w' and str(b.get('command', '')).lower() == 'workbench.action.closealleditors' for b in (result if isinstance(result, list) else []))"
+    },
+    {
+      "id": "m6_kb_saveall",
+      "description": "ctrl+alt+s is bound to workbench.action.files.saveAll on the same binding entry (stricter than the outcome verifier, see checkpoints.md)",
+      "channel": "file",
+      "command": "keybindings",
+      "eval": "any(isinstance(b, dict) and str(b.get('key', '')).lower() == 'ctrl+alt+s' and str(b.get('command', '')).lower() == 'workbench.action.files.saveall' for b in (result if isinstance(result, list) else []))"
+    }
+  ]
+}
