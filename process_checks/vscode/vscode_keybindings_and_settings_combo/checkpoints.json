@@ -1,51 +1,49 @@
 {
   "task_id": "vscode_keybindings_and_settings_combo",
   "app": "vscode",
+  "_note": "All six checkpoints read the raw config files and parse them as JSONC (process_checks/lib/jsonc), NOT via the verifier's check-setting/keybindings endpoints. Reason: VSCode ships/edits these files as JSONC (comment headers, trailing commas) and the verifier's strict json.loads reports a VSCode-valid file as unreadable -- a confirmed false negative (live run 2026-07-18). The predicates are unchanged in meaning; only the read channel moved.",
   "checkpoints": [
     {
       "id": "m1_fontsize",
       "description": "editor.fontSize is 14 in user settings.json",
       "channel": "file",
-      "command": "check-setting editor.fontSize 14",
-      "key": "match",
-      "expected": true
+      "jsonc_file": "/home/user/.config/Code/User/settings.json",
+      "eval": "isinstance(result, dict) and result.get('editor.fontSize') == 14"
     },
     {
       "id": "m2_tabsize",
       "description": "editor.tabSize is 4 in user settings.json",
       "channel": "file",
-      "command": "check-setting editor.tabSize 4",
-      "key": "match",
-      "expected": true
+      "jsonc_file": "/home/user/.config/Code/User/settings.json",
+      "eval": "isinstance(result, dict) and result.get('editor.tabSize') == 4"
     },
     {
       "id": "m3_cursorstyle",
       "description": "editor.cursorStyle is block in user settings.json",
       "channel": "file",
-      "command": "check-setting editor.cursorStyle block",
-      "key": "match",
-      "expected": true
+      "jsonc_file": "/home/user/.config/Code/User/settings.json",
+      "eval": "isinstance(result, dict) and result.get('editor.cursorStyle') == 'block'"
     },
     {
       "id": "m4_kb_newfile",
-      "description": "ctrl+shift+n is bound to workbench.action.files.newUntitledFile on the same binding entry (stricter than the outcome verifier, see checkpoints.md)",
+      "description": "ctrl+shift+n bound to workbench.action.files.newUntitledFile on the same binding entry",
       "channel": "file",
-      "command": "keybindings",
-      "eval": "any(isinstance(b, dict) and str(b.get('key', '')).lower() == 'ctrl+shift+n' and str(b.get('command', '')).lower() == 'workbench.action.files.newuntitledfile' for b in (result if isinstance(result, list) else []))"
+      "jsonc_file": "/home/user/.config/Code/User/keybindings.json",
+      "eval": "isinstance(result, list) and any(isinstance(b, dict) and str(b.get('key', '')).lower() == 'ctrl+shift+n' and str(b.get('command', '')).lower() == 'workbench.action.files.newuntitledfile' for b in result)"
     },
     {
       "id": "m5_kb_closeall",
-      "description": "ctrl+shift+w is bound to workbench.action.closeAllEditors on the same binding entry (outcome verifier checks key existence only, no command check at all for this milestone)",
+      "description": "ctrl+shift+w bound to workbench.action.closeAllEditors on the same binding entry",
       "channel": "file",
-      "command": "keybindings",
-      "eval": "any(isinstance(b, dict) and str(b.get('key', '')).lower() == 'ctrl+shift+w' and str(b.get('command', '')).lower() == 'workbench.action.closealleditors' for b in (result if isinstance(result, list) else []))"
+      "jsonc_file": "/home/user/.config/Code/User/keybindings.json",
+      "eval": "isinstance(result, list) and any(isinstance(b, dict) and str(b.get('key', '')).lower() == 'ctrl+shift+w' and str(b.get('command', '')).lower() == 'workbench.action.closealleditors' for b in result)"
     },
     {
       "id": "m6_kb_saveall",
-      "description": "ctrl+alt+s is bound to workbench.action.files.saveAll on the same binding entry (stricter than the outcome verifier, see checkpoints.md)",
+      "description": "ctrl+alt+s bound to workbench.action.files.saveAll on the same binding entry",
       "channel": "file",
-      "command": "keybindings",
-      "eval": "any(isinstance(b, dict) and str(b.get('key', '')).lower() == 'ctrl+alt+s' and str(b.get('command', '')).lower() == 'workbench.action.files.saveall' for b in (result if isinstance(result, list) else []))"
+      "jsonc_file": "/home/user/.config/Code/User/keybindings.json",
+      "eval": "isinstance(result, list) and any(isinstance(b, dict) and str(b.get('key', '')).lower() == 'ctrl+alt+s' and str(b.get('command', '')).lower() == 'workbench.action.files.saveall' for b in result)"
     }
   ]
 }
