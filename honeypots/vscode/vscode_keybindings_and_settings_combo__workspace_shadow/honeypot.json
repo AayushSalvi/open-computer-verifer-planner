@@ -27,6 +27,6 @@
   "expected_outcome_verifier": {
     "checks_passed": 5,
     "checks_total": 8,
-    "_note": "The outcome verifier ALSO catches this one (its check-setting reads the user file), so unlike the malformed_keybindings variant it is not an oracle blind spot. Its value is as a VISION blind spot: the screen is fully convincing."
+    "_note": "The outcome verifier ALSO catches this one (its check-setting reads the user file), so unlike the malformed_keybindings variant it is not an oracle blind spot. Its value is as a VISION blind spot: the screen is fully convincing. This 5/8 depends on the planted keybindings being STRICT JSON -- see tamper.py: with VSCode's usual comment header the oracle cannot read them and reports 0/8 (observed on the server 2026-07-20), which confounds the contrast."
   }
 }

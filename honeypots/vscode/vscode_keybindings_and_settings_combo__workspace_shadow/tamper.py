@@ -63,12 +63,19 @@ def tamper(sandbox) -> dict:
     # Right scope, wrong values.
     plant_jsonc(sandbox, USER_SETTINGS, USER_STALE)
     # Correct, so only the settings conditions fail.
-    plant_jsonc(
-        sandbox,
-        KEYBINDS_PATH,
-        KEYBINDS_CORRECT,
-        header_comment="// Place your key bindings in this file to override the defaults",
-    )
+    #
+    # Deliberately STRICT JSON — no comment header. This variant's job is to be
+    # a pure *vision* blind spot that the existing outcome verifier still
+    # catches, which requires the outcome verifier to be able to read every
+    # file it checks. Planting VSCode's usual `// Place your key bindings...`
+    # header here trips the oracle's JSONC bug (confirmed on the server
+    # 2026-07-20: all five keybinding checks became unreadable, giving 0/8
+    # instead of 5/8) and confounds the contrast with the
+    # malformed_keybindings variant. The oracle's JSONC false negative is
+    # already demonstrated twice elsewhere — the live 2026-07-18 run and
+    # synthetic_golden.py's `jsonc` variant — so it does not need a third
+    # sighting here at the cost of this variant's clarity.
+    plant_jsonc(sandbox, KEYBINDS_PATH, KEYBINDS_CORRECT)
     # A plausible project for the workspace file to belong to.
     plant_raw(sandbox, "/home/user/project/README.md", "# project\n")
     return {
