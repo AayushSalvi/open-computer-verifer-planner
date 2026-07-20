@@ -79,3 +79,7 @@ graphify-out/
 process_checks/runs/
 
 logs/
+
+# Generated Word exports of the (gitignored) markdown docs -- keep binaries
+# out of git; regenerate with: pandoc docs/PROGRESS.md -o docs/PROGRESS.docx
+*.docx

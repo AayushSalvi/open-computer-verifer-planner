@@ -1,0 +1,32 @@
+{
+  "variant": "malformed_keybindings",
+  "base_task": "vscode_keybindings_and_settings_combo",
+  "app": "vscode",
+  "origin": "harvested from a real failed trajectory (run 2026-07-18, qwen3.5-27b, 44 steps, agent_done=true)",
+  "mismatch": "screen shows three plausible-looking keybindings; the file is Python dict-repr that VSCode rejects with 14 errors, so none of the bindings are in effect",
+
+  "_note": "Checkpoints are NOT duplicated here — the catching set is the base task's own process_checks/vscode/<base_task>/checkpoints.json. Duplicating them would let the two copies drift. `expected_conditions` below is the assertion: plant the tamper, run the base checkpoints, and every verdict must match.",
+
+  "catching_conditions": ["m4_kb_newfile", "m5_kb_closeall", "m6_kb_saveall"],
+
+  "expected_conditions": {
+    "m1_fontsize": true,
+    "m2_tabsize": true,
+    "m3_cursorstyle": true,
+    "m4_kb_newfile": false,
+    "m5_kb_closeall": false,
+    "m6_kb_saveall": false
+  },
+
+  "expected_status": {
+    "m4_kb_newfile": "ok",
+    "m5_kb_closeall": "ok",
+    "m6_kb_saveall": "ok"
+  },
+
+  "expected_outcome_verifier": {
+    "checks_passed": 3,
+    "checks_total": 8,
+    "_note": "The outcome verifier reaches 3/8 here for the WRONG reason — its strict json.loads cannot read the file at all. It reports the identical 3/8 on a perfectly correct JSONC config (see process_checks/runner/synthetic_golden.py, jsonc variant). Our checkpoints distinguish the two; the outcome verifier does not."
+  }
+}

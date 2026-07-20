@@ -1,0 +1,32 @@
+{
+  "variant": "workspace_shadow",
+  "base_task": "vscode_keybindings_and_settings_combo",
+  "app": "vscode",
+  "origin": "PROJECT.md named first target — 'workspace settings.json shadowing user settings.json'",
+  "mismatch": "a settings.json on screen shows exactly the values the task asked for, but it is the WORKSPACE file (/home/user/project/.vscode/settings.json); the USER file the task named still holds the old values",
+
+  "_note": "Checkpoints are NOT duplicated here — the catching set is the base task's own checkpoints.json. `expected_conditions` is the assertion: plant, run base checkpoints, match every verdict.",
+
+  "catching_conditions": ["m1_fontsize", "m2_tabsize", "m3_cursorstyle"],
+
+  "expected_conditions": {
+    "m1_fontsize": false,
+    "m2_tabsize": false,
+    "m3_cursorstyle": false,
+    "m4_kb_newfile": true,
+    "m5_kb_closeall": true,
+    "m6_kb_saveall": true
+  },
+
+  "expected_status": {
+    "m1_fontsize": "ok",
+    "m2_tabsize": "ok",
+    "m3_cursorstyle": "ok"
+  },
+
+  "expected_outcome_verifier": {
+    "checks_passed": 5,
+    "checks_total": 8,
+    "_note": "The outcome verifier ALSO catches this one (its check-setting reads the user file), so unlike the malformed_keybindings variant it is not an oracle blind spot. Its value is as a VISION blind spot: the screen is fully convincing."
+  }
+}
