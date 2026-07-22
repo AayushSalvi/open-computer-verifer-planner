@@ -59,7 +59,6 @@ from computer_env import (  # noqa: E402
 from evaluation.runtime.run_config import DEFAULT_SANDBOX_TIMEOUT, TASKS_DIR  # noqa: E402
 from evaluation.runtime.sandbox_session import setup_sandbox_session  # noqa: E402
 
-from process_checks.convert.structagent import add_probe_specs, load_checkpoints  # noqa: E402
 from process_checks.runner.checkpoints import run_checkpoints  # noqa: E402
 
 HONEYPOTS_DIR = REPO_ROOT / "honeypots"
@@ -148,7 +147,8 @@ def _variant_record(sandbox, app: str, checkpoints_dir: Path, planted: dict,
     }
 
 
-def run(app: str, task_id: str, out_dir: Path, golden_styles: list[str], **backend) -> int:
+def run(app: str, task_id: str, out_dir: Path, golden_styles: list[str],
+        probe_schema: str = "none", **backend) -> int:
     task_path = TASKS_DIR / task_id / "task.json"
     with open(task_path) as f:
         task = json.load(f)
@@ -223,6 +223,7 @@ def run(app: str, task_id: str, out_dir: Path, golden_styles: list[str], **backe
         "built_at": datetime.now().isoformat(),
         "purpose": "verifier cold-start SFT: contrastive screen-truthful vs screen-lying states",
         "pair_counts": {"truthful": len(truthful), "lying": len(lying)},
+        "probe_schema": probe_schema,
         "note": ("Probe traces are the demonstration half: a verdict shows the answer without "
                  "the behaviour that reaches it. Probes are deduplicated -- each variant lists "
                  "the unique probes issued and which conditions each one answers, so the "
@@ -231,13 +232,18 @@ def run(app: str, task_id: str, out_dir: Path, golden_styles: list[str], **backe
                  "verifier's own action schema."),
         "variants": records,
     }
-    # Translate each probe into the collaborator's verifier action schema
-    # (StructAgent file_grep). Best effort: predicates with no faithful regex
-    # form are reported rather than approximated.
-    bundle = add_probe_specs(bundle, load_checkpoints(checkpoints_dir))
-    stats = bundle["structagent_probe_stats"]
-    print(f"  structagent probes: {stats['translated']} translated, "
-          f"{stats['untranslated']} untranslated")
+    # Optionally also render each probe into a specific verifier's action
+    # schema. OFF by default: the canonical probe format for this project is
+    # not settled, and the bundle's own generic form (kind/path/parse) is the
+    # portable one. StructAgent is a reference implementation the collaborator
+    # pointed at for schema shape, NOT the project's pipeline -- so rendering
+    # into it is an explicit opt-in, not an assumption baked into every bundle.
+    if probe_schema == "structagent":
+        from process_checks.convert.structagent import add_probe_specs, load_checkpoints
+        bundle = add_probe_specs(bundle, load_checkpoints(checkpoints_dir))
+        stats = bundle["structagent_probe_stats"]
+        print(f"  structagent probes: {stats['translated']} translated, "
+              f"{stats['untranslated']} untranslated")
 
     out = out_dir / f"{task_id}_pairs.json"
     with open(out, "w", encoding="utf-8") as f:
@@ -256,6 +262,12 @@ def main():
     p.add_argument("--out-dir", default=str(REPO_ROOT / "process_checks" / "runs" / "training_pairs"))
     p.add_argument("--golden-styles", default="plain,jsonc",
                    help="comma-separated golden styles to plant (default: plain,jsonc)")
+    p.add_argument("--probe-schema", choices=["none", "structagent"], default="none",
+                   help="additionally render probes into a specific verifier's action "
+                        "schema. Default none: the bundle's generic kind/path/parse form "
+                        "is portable, and the canonical schema for this project is not "
+                        "settled. 'structagent' targets WenyiWU0111/StructAgent, a "
+                        "reference implementation -- not this project's pipeline.")
     p.add_argument("--env-backend", choices=["e2b", "docker", "remote_docker"], default=DEFAULT_ENV_BACKEND)
     p.add_argument("--docker-image", default=DEFAULT_DOCKER_IMAGE)
     p.add_argument("--docker-platform", default=DEFAULT_DOCKER_PLATFORM)
@@ -267,6 +279,7 @@ def main():
     a = p.parse_args()
     sys.exit(run(a.app, a.task, Path(a.out_dir),
                  [s.strip() for s in a.golden_styles.split(",") if s.strip()],
+                 probe_schema=a.probe_schema,
                  env_backend=a.env_backend, docker_image=a.docker_image,
                  docker_platform=a.docker_platform, docker_shm_size=a.docker_shm_size,
                  docker_memory=a.docker_memory, docker_cpus=a.docker_cpus,

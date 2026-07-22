@@ -1,7 +1,21 @@
 """
 Our checkpoint probes  ->  StructAgent verifier probe specs.
 
-Target schema (WenyiWU0111/StructAgent,
+SCOPE -- READ FIRST
+-------------------
+StructAgent is NOT this project's pipeline. The collaborator pointed at it as a
+reference for what a verifier probe schema looks like, and this module renders
+our probes into that shape so the mapping question can be discussed against
+something concrete.
+
+The portable form is the one in the training-pair bundle itself
+(`kind`/`path`/`parse`). This renderer is opt-in
+(`build_training_pairs.py --probe-schema structagent`) and OFF by default,
+precisely so no bundle silently commits to a schema the project has not
+chosen. If the real target format differs, replace this module; nothing
+upstream of it depends on StructAgent.
+
+Reference schema (WenyiWU0111/StructAgent,
 mm_agents/structagent/core/verifier/boundary_verify.py):
 
     file_grep  {"kind":"file_grep","file_path":"/abs/path",
