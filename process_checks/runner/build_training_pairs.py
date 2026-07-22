@@ -59,6 +59,7 @@ from computer_env import (  # noqa: E402
 from evaluation.runtime.run_config import DEFAULT_SANDBOX_TIMEOUT, TASKS_DIR  # noqa: E402
 from evaluation.runtime.sandbox_session import setup_sandbox_session  # noqa: E402
 
+from process_checks.convert.structagent import add_probe_specs, load_checkpoints  # noqa: E402
 from process_checks.runner.checkpoints import run_checkpoints  # noqa: E402
 
 HONEYPOTS_DIR = REPO_ROOT / "honeypots"
@@ -230,6 +231,14 @@ def run(app: str, task_id: str, out_dir: Path, golden_styles: list[str], **backe
                  "verifier's own action schema."),
         "variants": records,
     }
+    # Translate each probe into the collaborator's verifier action schema
+    # (StructAgent file_grep). Best effort: predicates with no faithful regex
+    # form are reported rather than approximated.
+    bundle = add_probe_specs(bundle, load_checkpoints(checkpoints_dir))
+    stats = bundle["structagent_probe_stats"]
+    print(f"  structagent probes: {stats['translated']} translated, "
+          f"{stats['untranslated']} untranslated")
+
     out = out_dir / f"{task_id}_pairs.json"
     with open(out, "w", encoding="utf-8") as f:
         json.dump(bundle, f, indent=2, default=str)
