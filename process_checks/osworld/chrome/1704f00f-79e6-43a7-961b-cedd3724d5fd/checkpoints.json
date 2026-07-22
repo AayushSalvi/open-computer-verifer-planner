@@ -1,0 +1,78 @@
+{
+  "task_id": "1704f00f-79e6-43a7-961b-cedd3724d5fd",
+  "source": "osworld",
+  "instruction": "Find a large car from next Monday to Friday in Zurich, sorted by price.",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_check_direct_json_object",
+      "channel": "cdp",
+      "description": "check_direct_json_object over active_tab_url_parse",
+      "osworld": {
+        "func": "check_direct_json_object",
+        "result": {
+          "type": "active_tab_url_parse",
+          "goto_prefix": "https://www.",
+          "parse_keys": [
+            "locationName",
+            "dropLocationName",
+            "filterCriteria_carCategory",
+            "filterCriteria_sortBy"
+          ]
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expected": {
+              "locationName": "Zürich",
+              "dropLocationName": "Zürich",
+              "filterCriteria_carCategory": "large",
+              "filterCriteria_sortBy": "PRICE"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "c2_check_direct_json_object",
+      "channel": "cdp",
+      "description": "check_direct_json_object over active_tab_url_parse",
+      "osworld": {
+        "func": "check_direct_json_object",
+        "result": {
+          "type": "active_tab_url_parse",
+          "goto_prefix": "https://www.",
+          "parse_keys": [
+            "puDay",
+            "puMonth",
+            "puYear",
+            "doDay",
+            "doMonth",
+            "doYear"
+          ]
+        },
+        "expected": {
+          "type": "rule_relativeTime",
+          "rules": {
+            "relativeTime": {
+              "from": "next Monday split",
+              "to": "next Friday split"
+            },
+            "timezone": "Europe/Zurich",
+            "expected": {
+              "puDay": "{DayD}",
+              "puMonth": "{MonthD}",
+              "puYear": "{Year}",
+              "doDay": "{DayD}",
+              "doMonth": "{MonthD}",
+              "doYear": "{Year}"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "warnings": [],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\chrome\\1704f00f-79e6-43a7-961b-cedd3724d5fd.json",
+  "domain": "chrome"
+}

@@ -1,0 +1,78 @@
+{
+  "task_id": "e1fc0df3-c8b9-4ee7-864c-d0b590d3aa56",
+  "source": "osworld",
+  "instruction": "Install LanguageTool extension for my LibreOffice",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_check_list",
+      "channel": "file",
+      "description": "check_list over cache_file",
+      "osworld": {
+        "func": "check_list",
+        "result": {
+          "type": "cache_file",
+          "path": "grep.out"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expect": [
+              "org\\.openoffice\\.languagetool\\.oxt"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "c2_check_list",
+      "channel": "file",
+      "description": "check_list over cache_file",
+      "osworld": {
+        "func": "check_list",
+        "result": {
+          "type": "cache_file",
+          "path": "apt.out"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expect": [
+              "openjdk-\\d+-(jre|jdk)"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "warnings": [
+    "evaluator declares 2 postconfig step(s): state must be flushed before reading, or checks may see stale state"
+  ],
+  "postconfig": [
+    {
+      "type": "command",
+      "parameters": {
+        "command": [
+          "grep",
+          "-nHr",
+          "languagetool",
+          "/home/user/.config/libreoffice/4/user/uno_packages/cache/uno_packages/"
+        ],
+        "stdout": "grep.out"
+      }
+    },
+    {
+      "type": "command",
+      "parameters": {
+        "command": [
+          "apt",
+          "list",
+          "--installed"
+        ],
+        "stdout": "apt.out"
+      }
+    }
+  ],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\multi_apps\\e1fc0df3-c8b9-4ee7-864c-d0b590d3aa56.json",
+  "domain": "multi_apps"
+}

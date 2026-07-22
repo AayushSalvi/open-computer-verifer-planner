@@ -1,0 +1,67 @@
+{
+  "task_id": "48c46dc7-fe04-4505-ade7-723cba1aa6f6",
+  "source": "osworld",
+  "instruction": "Help me to automatically set up my work space. To be specific, open project directory of OSWorld in terminal and file manager, then open github homepage and the online document of Python in chrome browser.",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_check_list",
+      "channel": "file",
+      "description": "check_list over cache_file",
+      "osworld": {
+        "func": "check_list",
+        "result": {
+          "type": "cache_file",
+          "path": "wmctrl.out"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expect": [
+              "\\borg\\.gnome\\.Nautilus\\.Org\\.gnome\\.Nautilus\\b.*\\bOSWorld\\b",
+              "gnome-terminal-server\\.Gnome-terminal\\b.*~/Documents/Projects/OSWorld\\b"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "c2_is_expected_tabs",
+      "channel": "cdp",
+      "description": "is_expected_tabs over open_tabs_info",
+      "osworld": {
+        "func": "is_expected_tabs",
+        "result": {
+          "type": "open_tabs_info"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "type": "url",
+            "urls": [
+              "https://github.com",
+              "https://docs.python.org/3/"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "warnings": [
+    "evaluator declares 1 postconfig step(s): state must be flushed before reading, or checks may see stale state"
+  ],
+  "postconfig": [
+    {
+      "type": "execute",
+      "parameters": {
+        "command": [
+          "wmctrl",
+          "-lx"
+        ],
+        "stdout": "wmctrl.out"
+      }
+    }
+  ],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\multi_apps\\48c46dc7-fe04-4505-ade7-723cba1aa6f6.json",
+  "domain": "multi_apps"
+}

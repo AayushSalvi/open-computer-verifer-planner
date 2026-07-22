@@ -211,5 +211,91 @@ def convert_tree(root) -> list[dict]:
             continue
         spec = convert(task)
         spec["source_path"] = str(p)
+        spec["domain"] = Path(p).parent.name
         out.append(spec)
     return out
+
+
+# ---------------------------------------------------------------------------
+# CLI — emit the converted specs to disk
+# ---------------------------------------------------------------------------
+
+def _write_specs(specs: list[dict], out_dir: Path, only_decomposable: bool) -> tuple[int, int]:
+    """Write one checkpoints.json per task, mirroring our repo layout:
+        <out_dir>/<domain>/<task_id>/checkpoints.json
+    """
+    written = skipped = 0
+    for spec in specs:
+        if only_decomposable and not spec["decomposable"]:
+            skipped += 1
+            continue
+        if not spec["checkpoints"]:
+            skipped += 1
+            continue
+        d = out_dir / spec.get("domain", "unknown") / spec["task_id"]
+        d.mkdir(parents=True, exist_ok=True)
+        with open(d / "checkpoints.json", "w", encoding="utf-8") as f:
+            json.dump(spec, f, indent=2, ensure_ascii=False)
+        written += 1
+    return written, skipped
+
+
+def main() -> int:
+    import argparse
+    import collections
+
+    p = argparse.ArgumentParser(
+        description="Convert an OSWorld task corpus into per-condition checkpoint specs."
+    )
+    p.add_argument("corpus", help="root dir of OSWorld task JSONs")
+    p.add_argument("-o", "--out-dir", required=True, help="where to write specs")
+    p.add_argument("--all", action="store_true",
+                   help="also write single/opaque tasks (default: decomposable only)")
+    args = p.parse_args()
+
+    specs = convert_tree(args.corpus)
+    out_dir = Path(args.out_dir)
+    written, skipped = _write_specs(specs, out_dir, only_decomposable=not args.all)
+
+    decomp = [s for s in specs if s["decomposable"]]
+    or_trapped = [s for s in specs if any("ALTERNATIVE" in w for w in s["warnings"])]
+    channels = collections.Counter(c["channel"] for s in specs for c in s["checkpoints"])
+
+    index = {
+        "corpus": str(args.corpus),
+        "tasks_seen": len(specs),
+        "decomposable_tasks": len(decomp),
+        "conditions_from_decomposable": sum(len(s["checkpoints"]) for s in decomp),
+        "or_tasks_left_opaque": len(or_trapped),
+        "tasks_without_evaluator": sum(1 for s in specs if not s["checkpoints"]),
+        "channels": dict(channels),
+        "written": written,
+        "skipped": skipped,
+        "unvalidated": True,
+        "note": ("These are CANDIDATES converted from OSWorld evaluators. None have "
+                 "passed PROJECT.md's gates yet, and the upstream evaluators are known "
+                 "to contain defects (see the JSONC bug in metrics/vscode.py)."),
+        "tasks": [
+            {"task_id": s["task_id"], "domain": s.get("domain"),
+             "conditions": len(s["checkpoints"]),
+             "instruction": s["instruction"][:120],
+             "warnings": s["warnings"]}
+            for s in decomp
+        ],
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with open(out_dir / "index.json", "w", encoding="utf-8") as f:
+        json.dump(index, f, indent=2, ensure_ascii=False)
+
+    print(f"tasks seen:            {len(specs)}")
+    print(f"  decomposable:        {len(decomp)}  -> {index['conditions_from_decomposable']} conditions")
+    print(f"  'or' left opaque:    {len(or_trapped)}")
+    print(f"  no evaluator:        {index['tasks_without_evaluator']}")
+    print(f"channels: {dict(channels)}")
+    print(f"\nwrote {written} spec(s), skipped {skipped}")
+    print(f"index: {out_dir / 'index.json'}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

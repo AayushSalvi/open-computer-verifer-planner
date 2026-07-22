@@ -1,0 +1,57 @@
+{
+  "task_id": "c867c42d-a52d-4a24-8ae3-f75d256b5618",
+  "source": "osworld",
+  "instruction": "Please assist me in exporting my contacts of Personal Address Book from Thunderbird into contacts.csv file in the desktop and convert it to .xlsx with Libreoffice Calc.",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_compare_csv",
+      "channel": "file",
+      "description": "compare_csv over vm_file",
+      "osworld": {
+        "func": "compare_csv",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Desktop/contacts.csv",
+          "dest": "contacts.csv"
+        },
+        "expected": {
+          "type": "cloud_file",
+          "path": "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/c867c42d-a52d-4a24-8ae3-f75d256b5618/contacts.csv",
+          "dest": "contacts_gold.csv"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c2_compare_table",
+      "channel": "file",
+      "description": "compare_table over vm_file",
+      "osworld": {
+        "func": "compare_table",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Desktop/contacts.xlsx",
+          "dest": "contacts.xlsx"
+        },
+        "expected": {
+          "type": "cloud_file",
+          "path": "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/c867c42d-a52d-4a24-8ae3-f75d256b5618/contacts.xlsx",
+          "dest": "contacts_gold.xlsx"
+        },
+        "options": {
+          "rules": [
+            {
+              "type": "sheet_data",
+              "sheet_idx0": "RI0",
+              "sheet_idx1": "EI0"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "warnings": [],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\multi_apps\\c867c42d-a52d-4a24-8ae3-f75d256b5618.json",
+  "domain": "multi_apps"
+}

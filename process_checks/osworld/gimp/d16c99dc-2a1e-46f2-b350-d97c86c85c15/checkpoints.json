@@ -1,0 +1,107 @@
+{
+  "task_id": "d16c99dc-2a1e-46f2-b350-d97c86c85c15",
+  "source": "osworld",
+  "instruction": "Could you assist me with resizing the dog layer of an image? I need to adjust the height to 512 pixels while maintaining the original aspect ratio?",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_check_image_size",
+      "channel": "file",
+      "description": "check_image_size over vm_file",
+      "osworld": {
+        "func": "check_image_size",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Desktop/resized.png",
+          "dest": "resized.png"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "height": 512,
+            "ignore_transparent": true
+          }
+        }
+      }
+    },
+    {
+      "id": "c2_check_structure_sim_resized",
+      "channel": "file",
+      "description": "check_structure_sim_resized over vm_file",
+      "osworld": {
+        "func": "check_structure_sim_resized",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Desktop/resized.png",
+          "dest": "resized.png"
+        },
+        "expected": {
+          "type": "cloud_file",
+          "path": "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/d16c99dc-2a1e-46f2-b350-d97c86c85c15/dog_with_background.png",
+          "dest": "dog_with_background.png"
+        }
+      }
+    }
+  ],
+  "warnings": [
+    "evaluator declares 7 postconfig step(s): state must be flushed before reading, or checks may see stale state"
+  ],
+  "postconfig": [
+    {
+      "type": "activate_window",
+      "parameters": {
+        "window_name": "GNU Image Manipulation Program"
+      }
+    },
+    {
+      "type": "execute",
+      "parameters": {
+        "command": [
+          "python3",
+          "-c",
+          "import time; import pyautogui; time.sleep(1);pyautogui.hotkey([\"shift\", \"ctrl\", \"e\"]);time.sleep(1);"
+        ]
+      }
+    },
+    {
+      "type": "sleep",
+      "parameters": {
+        "seconds": 0.5
+      }
+    },
+    {
+      "type": "execute",
+      "parameters": {
+        "command": [
+          "python3",
+          "-c",
+          "import time; import pyautogui; pyautogui.write(\"resized\");time.sleep(1);pyautogui.press([\"enter\"]);"
+        ]
+      }
+    },
+    {
+      "type": "sleep",
+      "parameters": {
+        "seconds": 2
+      }
+    },
+    {
+      "type": "execute",
+      "parameters": {
+        "command": [
+          "python3",
+          "-c",
+          "import pyautogui; pyautogui.press([\"enter\"]);"
+        ]
+      }
+    },
+    {
+      "type": "sleep",
+      "parameters": {
+        "seconds": 5
+      }
+    }
+  ],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\gimp\\d16c99dc-2a1e-46f2-b350-d97c86c85c15.json",
+  "domain": "gimp"
+}

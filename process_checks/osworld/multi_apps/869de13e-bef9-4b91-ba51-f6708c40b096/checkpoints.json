@@ -1,0 +1,74 @@
+{
+  "task_id": "869de13e-bef9-4b91-ba51-f6708c40b096",
+  "source": "osworld",
+  "instruction": "Can you organize my desktop by identifying academic papers, coding projects, and other documents, ensuring no file is misplaced? Specifically, place academic papers in the 'Paper_reading' folder, coding projects in 'Projects', and categorize everything else under 'Miscellaneous'. For files lacking clear extensions or names, apply content analysis to determine their appropriate classification.",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_exact_match",
+      "channel": "cli",
+      "description": "exact_match over vm_command_line",
+      "osworld": {
+        "func": "exact_match",
+        "result": {
+          "type": "vm_command_line",
+          "command": [
+            "ls",
+            "/home/user/Desktop/Paper_reading"
+          ]
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expected": "1706.03762.pdf\n1802.05365.pdf\n1909.10351.pdf\nGLUE: A MULTI-TASK BENCHMARK AND ANALYSIS.pdf\npaper01.pdf\n"
+          }
+        }
+      }
+    },
+    {
+      "id": "c2_exact_match",
+      "channel": "cli",
+      "description": "exact_match over vm_command_line",
+      "osworld": {
+        "func": "exact_match",
+        "result": {
+          "type": "vm_command_line",
+          "command": [
+            "ls",
+            "/home/user/Desktop/Projects"
+          ]
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expected": "2-if-for-array\nassign1-data_python3\n"
+          }
+        }
+      }
+    },
+    {
+      "id": "c3_exact_match",
+      "channel": "cli",
+      "description": "exact_match over vm_command_line",
+      "osworld": {
+        "func": "exact_match",
+        "result": {
+          "type": "vm_command_line",
+          "command": [
+            "ls",
+            "/home/user/Desktop/Miscellaneous"
+          ]
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expected": "07-cluster-kMean (1).ppt\n2023_validation_7bd855d8-463d-4ed5-93ca-5fe35145f733.xlsx\nassignment_mark_frontpage.docx\ncco-return-to-school-survey-underlying-data-tables.xlsx\nDOC_2480903712718068684.pdf\nFamily Status Equality-Eng (Aug 2021).pdf\nIA_Format.docx\n"
+          }
+        }
+      }
+    }
+  ],
+  "warnings": [],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\multi_apps\\869de13e-bef9-4b91-ba51-f6708c40b096.json",
+  "domain": "multi_apps"
+}

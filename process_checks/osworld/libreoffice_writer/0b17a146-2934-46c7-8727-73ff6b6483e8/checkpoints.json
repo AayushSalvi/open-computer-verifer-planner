@@ -1,0 +1,74 @@
+{
+  "task_id": "0b17a146-2934-46c7-8727-73ff6b6483e8",
+  "source": "osworld",
+  "instruction": "Help me change the 2 in \"H2O\" to a subscript.",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_compare_docx_files",
+      "channel": "file",
+      "description": "compare_docx_files over vm_file",
+      "osworld": {
+        "func": "compare_docx_files",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Desktop/H2O_Factsheet_WA.docx",
+          "dest": "H2O_Factsheet_WA.docx"
+        },
+        "expected": {
+          "type": "cloud_file",
+          "path": "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/0b17a146-2934-46c7-8727-73ff6b6483e8/H2O_Factsheet_WA_Gold.docx",
+          "dest": "H2O_Factsheet_WA_Gold.docx"
+        }
+      }
+    },
+    {
+      "id": "c2_compare_subscript_contains",
+      "channel": "file",
+      "description": "compare_subscript_contains over vm_file",
+      "osworld": {
+        "func": "compare_subscript_contains",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Desktop/H2O_Factsheet_WA.docx",
+          "dest": "H2O_Factsheet_WA.docx"
+        },
+        "expected": {
+          "type": "cloud_file",
+          "path": "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/0b17a146-2934-46c7-8727-73ff6b6483e8/H2O_Factsheet_WA_Gold.docx",
+          "dest": "H2O_Factsheet_WA_Gold.docx"
+        }
+      }
+    }
+  ],
+  "warnings": [
+    "evaluator declares 3 postconfig step(s): state must be flushed before reading, or checks may see stale state"
+  ],
+  "postconfig": [
+    {
+      "type": "activate_window",
+      "parameters": {
+        "window_name": "H2O_Factsheet_WA.docx - LibreOffice Writer",
+        "strict": true
+      }
+    },
+    {
+      "type": "sleep",
+      "parameters": {
+        "seconds": 0.5
+      }
+    },
+    {
+      "type": "execute",
+      "parameters": {
+        "command": [
+          "python",
+          "-c",
+          "import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); "
+        ]
+      }
+    }
+  ],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\libreoffice_writer\\0b17a146-2934-46c7-8727-73ff6b6483e8.json",
+  "domain": "libreoffice_writer"
+}

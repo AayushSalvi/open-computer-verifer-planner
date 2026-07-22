@@ -1,0 +1,98 @@
+{
+  "task_id": "78aed49a-a710-4321-a793-b611a7c5b56b",
+  "source": "osworld",
+  "instruction": "Could you help me save all attachments of the oldest email in Bills local folders to the attachment/ folder in Google Drive and then move this email to a different folder \"have_seen\" in Local Folders.",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_check_thunderbird_folder",
+      "channel": "file",
+      "description": "check_thunderbird_folder over vm_file",
+      "osworld": {
+        "func": "check_thunderbird_folder",
+        "result": {
+          "type": "vm_file",
+          "multi": true,
+          "path": [
+            "/home/user/.thunderbird/t5q2a5hp.default-release/Mail/Local Folders/have_seen",
+            "/home/user/.thunderbird/t5q2a5hp.default-release/Mail/Local Folders/Bills"
+          ],
+          "dest": [
+            "have_seen",
+            "Bills"
+          ],
+          "gives": [
+            0,
+            1
+          ]
+        },
+        "expected": {
+          "type": "cloud_file",
+          "multi": true,
+          "path": [
+            "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/78aed49a-a710-4321-a793-b611a7c5b56b/have_seen.bin",
+            "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/78aed49a-a710-4321-a793-b611a7c5b56b/Bills.bin"
+          ],
+          "dest": [
+            "have_seen_gold",
+            "Bills_gold"
+          ],
+          "gives": [
+            0,
+            1
+          ]
+        },
+        "options": {
+          "remove_deleted": true,
+          "remove_duplicate": true
+        }
+      }
+    },
+    {
+      "id": "c2_compare_pdfs",
+      "channel": "file",
+      "description": "compare_pdfs over googledrive_file",
+      "osworld": {
+        "func": "compare_pdfs",
+        "result": {
+          "type": "googledrive_file",
+          "settings_file": "evaluation_examples/settings/googledrive/settings.yml",
+          "path_list": [
+            [
+              "attachment",
+              "Invoice-01234567-89ab.pdf"
+            ],
+            [
+              "attachment",
+              "Receipt-0123-4567.pdf"
+            ]
+          ],
+          "dest": [
+            "Invoice-01234567-89ab.pdf",
+            "Receipt-0123-4567.pdf"
+          ]
+        },
+        "expected": {
+          "type": "cloud_file",
+          "multi": true,
+          "path": [
+            "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/78aed49a-a710-4321-a793-b611a7c5b56b/Invoice-01234567-89ab.pdf",
+            "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/78aed49a-a710-4321-a793-b611a7c5b56b/Receipt-0123-4567.pdf"
+          ],
+          "dest": [
+            "Invoice-01234567-89ab_gold.pdf",
+            "Receipt-0123-4567_gold.pdf"
+          ],
+          "gives": [
+            0,
+            1
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "warnings": [],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\multi_apps\\78aed49a-a710-4321-a793-b611a7c5b56b.json",
+  "domain": "multi_apps"
+}

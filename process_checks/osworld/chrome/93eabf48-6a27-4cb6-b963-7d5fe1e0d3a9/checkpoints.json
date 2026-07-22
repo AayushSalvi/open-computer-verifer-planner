@@ -1,0 +1,62 @@
+{
+  "task_id": "93eabf48-6a27-4cb6-b963-7d5fe1e0d3a9",
+  "source": "osworld",
+  "instruction": "Could you assist me in turning off the dark mode feature in Google Chrome? I've noticed that while dark mode is great for reducing glare, it actually makes it more challenging for me to read text clearly, especially with my astigmatism.",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_match_in_list",
+      "channel": "unknown",
+      "description": "match_in_list over chrome_appearance_mode_ui",
+      "osworld": {
+        "func": "match_in_list",
+        "result": {
+          "type": "chrome_appearance_mode_ui"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expected": [
+              "light",
+              "system"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "c2_is_expected_url_pattern_match",
+      "channel": "cdp",
+      "description": "is_expected_url_pattern_match over active_url_from_accessTree",
+      "osworld": {
+        "func": "is_expected_url_pattern_match",
+        "result": {
+          "type": "active_url_from_accessTree",
+          "goto_prefix": ""
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expected": [
+              "^chrome://settings/appearance/?$"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "warnings": [
+    "evaluator declares 1 postconfig step(s): state must be flushed before reading, or checks may see stale state",
+    "condition 1 (match_in_list): unmapped getter type 'chrome_appearance_mode_ui'"
+  ],
+  "postconfig": [
+    {
+      "type": "sleep",
+      "parameters": {
+        "seconds": 1
+      }
+    }
+  ],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\chrome\\93eabf48-6a27-4cb6-b963-7d5fe1e0d3a9.json",
+  "domain": "chrome"
+}

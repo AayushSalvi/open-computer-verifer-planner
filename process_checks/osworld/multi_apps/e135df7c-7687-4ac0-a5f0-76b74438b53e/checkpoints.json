@@ -1,0 +1,56 @@
+{
+  "task_id": "e135df7c-7687-4ac0-a5f0-76b74438b53e",
+  "source": "osworld",
+  "instruction": "Please convert a .xlsx file opened in LibreOffice Calc to a .html file and view it in Chrome.",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_is_expected_tabs",
+      "channel": "cdp",
+      "description": "is_expected_tabs over open_tabs_info",
+      "osworld": {
+        "func": "is_expected_tabs",
+        "result": {
+          "type": "open_tabs_info"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "type": "url",
+            "urls": [
+              "https://aclanthology.org/",
+              "https://openai.com/",
+              "https://www.linkedin.com/home/",
+              "file:///home/user/Desktop/annual-enterprise-survey-2021-financial-year-provisional.html"
+            ]
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c2_compare_htmls",
+      "channel": "file",
+      "description": "compare_htmls over vm_file",
+      "osworld": {
+        "func": "compare_htmls",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Desktop/annual-enterprise-survey-2021-financial-year-provisional.html",
+          "dest": "annual-enterprise-survey-2021-financial-year-provisional.html"
+        },
+        "expected": {
+          "type": "cloud_file",
+          "path": "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/e135df7c-7687-4ac0-a5f0-76b74438b53e/annual-enterprise-survey-2021-financial-year-provisional.html",
+          "dest": "annual-enterprise-survey-2021-financial-year-provisional_gold.html"
+        },
+        "options": {
+          "ignore_sdnum": true
+        }
+      }
+    }
+  ],
+  "warnings": [],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\multi_apps\\e135df7c-7687-4ac0-a5f0-76b74438b53e.json",
+  "domain": "multi_apps"
+}

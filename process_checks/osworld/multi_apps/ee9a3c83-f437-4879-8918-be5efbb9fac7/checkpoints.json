@@ -1,0 +1,67 @@
+{
+  "task_id": "ee9a3c83-f437-4879-8918-be5efbb9fac7",
+  "source": "osworld",
+  "instruction": "Could you help me convert the opened ods file in the desktop to csv file with the same file name using command line when Libreoffice instance is running?",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_check_include_exclude",
+      "channel": "cli",
+      "description": "check_include_exclude over vm_command_line",
+      "osworld": {
+        "func": "check_include_exclude",
+        "result": {
+          "type": "vm_command_line",
+          "command": [
+            "/bin/bash",
+            "-c",
+            "use_terminal=$(cat ~/.bash_history | grep \"\\(soffice\\|libreoffice\\).\\+--convert-to\\s\\+csv\"); if [ -z \"$use_terminal\" ]; then echo \"use no terminal\"; else echo \"use terminal\"; fi"
+          ]
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "include": [
+              "use terminal"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "c2_compare_csv",
+      "channel": "file",
+      "description": "compare_csv over vm_file",
+      "osworld": {
+        "func": "compare_csv",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Desktop/file_example_ODS_5000.csv",
+          "dest": "file_example_ODS_5000.csv"
+        },
+        "expected": {
+          "type": "cloud_file",
+          "path": "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/ee9a3c83-f437-4879-8918-be5efbb9fac7/file_example_ODS_5000.csv",
+          "dest": "file_example_ODS_5000_gold.csv"
+        }
+      }
+    }
+  ],
+  "warnings": [
+    "evaluator declares 1 postconfig step(s): state must be flushed before reading, or checks may see stale state"
+  ],
+  "postconfig": [
+    {
+      "type": "execute",
+      "parameters": {
+        "command": [
+          "/bin/bash",
+          "-c",
+          "killall gnome-terminal-server"
+        ]
+      }
+    }
+  ],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\multi_apps\\ee9a3c83-f437-4879-8918-be5efbb9fac7.json",
+  "domain": "multi_apps"
+}

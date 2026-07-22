@@ -1,0 +1,49 @@
+{
+  "task_id": "aa3a8974-2e85-438b-b29e-a64df44deb4b",
+  "source": "osworld",
+  "instruction": "I'm working on a project and need to resize cells in a spreadsheet to fit onto one page and export to PDF for efficient presentation. Could you help me on this? Keep the name of PDF the same as the spreadsheet and place it under my home directory.",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_check_pdf_pages",
+      "channel": "file",
+      "description": "check_pdf_pages over vm_file",
+      "osworld": {
+        "func": "check_pdf_pages",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Resize_Cells_Fit_Page.pdf",
+          "dest": "Resize_Cells_Fit_Page.pdf"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "relation": "eq",
+            "ref_value": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "c2_compare_pdfs",
+      "channel": "file",
+      "description": "compare_pdfs over vm_file",
+      "osworld": {
+        "func": "compare_pdfs",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Resize_Cells_Fit_Page.pdf",
+          "dest": "Resize_Cells_Fit_Page.pdf"
+        },
+        "expected": {
+          "type": "cloud_file",
+          "path": "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/aa3a8974-2e85-438b-b29e-a64df44deb4b/Resize_Cells_Fit_Page_gt.pdf",
+          "dest": "Resize_Cells_Fit_Page_gt.pdf"
+        }
+      }
+    }
+  ],
+  "warnings": [],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\libreoffice_calc\\aa3a8974-2e85-438b-b29e-a64df44deb4b.json",
+  "domain": "libreoffice_calc"
+}

@@ -1,0 +1,114 @@
+{
+  "task_id": "415ef462-bed3-493a-ac36-ca8c6d23bf1b",
+  "source": "osworld",
+  "instruction": "There's an e-mail containing the AWS invoice for December saved in local \"Bills\" folder. Extract the invoice PDF to the my receipts folder. Follow the file name pattern of the old files and append a record at the end of my tally book.",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_compare_table",
+      "channel": "file",
+      "description": "compare_table over vm_file",
+      "osworld": {
+        "func": "compare_table",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Documents/Finance/tally_book.xlsx",
+          "dest": "tally_book.xlsx"
+        },
+        "expected": {
+          "type": "cloud_file",
+          "path": "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/415ef462-bed3-493a-ac36-ca8c6d23bf1b/tally_book_gt.xlsx",
+          "dest": "tally_book_gt.xlsx"
+        },
+        "options": {
+          "rules": [
+            {
+              "type": "sheet_data",
+              "sheet_idx0": 0,
+              "sheet_idx1": "EI0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c2_check_list",
+      "channel": "file",
+      "description": "check_list over cache_file",
+      "osworld": {
+        "func": "check_list",
+        "result": {
+          "type": "cache_file",
+          "path": "diff.out"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "unexpect": [
+              ".+"
+            ]
+          }
+        },
+        "options": {}
+      }
+    }
+  ],
+  "warnings": [
+    "evaluator declares 6 postconfig step(s): state must be flushed before reading, or checks may see stale state"
+  ],
+  "postconfig": [
+    {
+      "type": "activate_window",
+      "parameters": {
+        "window_name": "tally_book.xlsx - LibreOffice Calc",
+        "strict": true
+      }
+    },
+    {
+      "type": "sleep",
+      "parameters": {
+        "seconds": 0.5
+      }
+    },
+    {
+      "type": "execute",
+      "parameters": {
+        "command": [
+          "python",
+          "-c",
+          "import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");"
+        ]
+      }
+    },
+    {
+      "type": "sleep",
+      "parameters": {
+        "seconds": 0.5
+      }
+    },
+    {
+      "type": "download",
+      "parameters": {
+        "files": [
+          {
+            "path": "/home/user/.aws-invoice-2312.pdf",
+            "url": "https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/415ef462-bed3-493a-ac36-ca8c6d23bf1b/invoice0123456789-2312.pdf"
+          }
+        ]
+      }
+    },
+    {
+      "type": "execute",
+      "parameters": {
+        "command": [
+          "diff",
+          ".aws-invoice-2312.pdf",
+          "/home/user/Documents/Finance/receipts/aws-invoice-2312.pdf"
+        ],
+        "stdout": "diff.out"
+      }
+    }
+  ],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\multi_apps\\415ef462-bed3-493a-ac36-ca8c6d23bf1b.json",
+  "domain": "multi_apps"
+}

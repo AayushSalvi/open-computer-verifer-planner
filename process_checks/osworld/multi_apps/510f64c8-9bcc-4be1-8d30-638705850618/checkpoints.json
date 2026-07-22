@@ -1,0 +1,75 @@
+{
+  "task_id": "510f64c8-9bcc-4be1-8d30-638705850618",
+  "source": "osworld",
+  "instruction": "Could you start VS Code in folder ~/Desktop/project from the terminal?",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_check_include_exclude",
+      "channel": "cli",
+      "description": "check_include_exclude over vm_command_line",
+      "osworld": {
+        "func": "check_include_exclude",
+        "result": {
+          "type": "vm_command_line",
+          "command": [
+            "/bin/bash",
+            "-c",
+            "use_terminal=$(cat ~/.bash_history | grep \"[c]ode \"); if [ -z \"$use_terminal\" ]; then echo \"false\"; else echo \"true\"; fi"
+          ]
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "include": [
+              "true"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "c2_compare_config",
+      "channel": "cli",
+      "description": "compare_config over vscode_config",
+      "osworld": {
+        "func": "compare_config",
+        "result": {
+          "type": "vscode_config",
+          "vscode_extension_command": "OpenProject",
+          "path": "/home/user/OpenProject.txt",
+          "dest": "OpenProject.txt"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expected": "project"
+          }
+        }
+      }
+    }
+  ],
+  "warnings": [
+    "evaluator declares 2 postconfig step(s): state must be flushed before reading, or checks may see stale state"
+  ],
+  "postconfig": [
+    {
+      "type": "execute",
+      "parameters": {
+        "command": [
+          "/bin/bash",
+          "-c",
+          "killall gnome-terminal-server"
+        ]
+      }
+    },
+    {
+      "type": "activate_window",
+      "parameters": {
+        "window_name": "Visual Studio Code"
+      }
+    }
+  ],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\multi_apps\\510f64c8-9bcc-4be1-8d30-638705850618.json",
+  "domain": "multi_apps"
+}

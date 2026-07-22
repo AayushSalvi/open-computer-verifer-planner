@@ -1,0 +1,67 @@
+{
+  "task_id": "7f52cab9-535c-4835-ac8c-391ee64dc930",
+  "source": "osworld",
+  "instruction": "Create a list of drip coffee makers that are on sale and within $25-60 and have a black finish.",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_check_direct_json_object",
+      "channel": "cdp",
+      "description": "check_direct_json_object over active_tab_url_parse",
+      "osworld": {
+        "func": "check_direct_json_object",
+        "result": {
+          "type": "active_tab_url_parse",
+          "goto_prefix": "https://www.",
+          "parse_keys": [
+            "q"
+          ]
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expected": {
+              "q": "drip coffee maker"
+            },
+            "expect_in_result": true
+          }
+        }
+      }
+    },
+    {
+      "id": "c2_check_direct_json_object",
+      "channel": "cdp",
+      "description": "check_direct_json_object over active_tab_html_parse",
+      "osworld": {
+        "func": "check_direct_json_object",
+        "result": {
+          "type": "active_tab_html_parse",
+          "goto_prefix": "https://www.",
+          "category": "class",
+          "class_multiObject_search_exist": {
+            "fT28tf": [
+              "Black",
+              "$25 - $60",
+              "On sale",
+              "is_other_exist"
+            ]
+          }
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expected": {
+              "Black": true,
+              "$25 - $60": true,
+              "On sale": true,
+              "is_other_exist": false
+            }
+          }
+        }
+      }
+    }
+  ],
+  "warnings": [],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\chrome\\7f52cab9-535c-4835-ac8c-391ee64dc930.json",
+  "domain": "chrome"
+}

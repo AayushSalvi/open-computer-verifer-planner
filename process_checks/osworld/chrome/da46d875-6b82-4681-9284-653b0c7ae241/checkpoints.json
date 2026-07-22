@@ -1,0 +1,85 @@
+{
+  "task_id": "da46d875-6b82-4681-9284-653b0c7ae241",
+  "source": "osworld",
+  "instruction": "Book an appointment to apply for a transportation access pass at the Charlie Card store on the first Monday eight months later, 10:15 am, fill in my details (James Smith, james.smith@gmail.com). And do not click \"book\" directly. Let me review it.",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_is_expected_url_pattern_match",
+      "channel": "cdp",
+      "description": "is_expected_url_pattern_match over active_tab_info",
+      "osworld": {
+        "func": "is_expected_url_pattern_match",
+        "result": {
+          "type": "active_tab_info"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expected": [
+              "book/CharlieCardStoreAppointments@mbta.com/"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "c2_check_direct_json_object",
+      "channel": "cdp",
+      "description": "check_direct_json_object over active_tab_html_parse",
+      "osworld": {
+        "func": "check_direct_json_object",
+        "result": {
+          "type": "active_tab_html_parse",
+          "category": "class",
+          "class_multiObject_only_child": {
+            "HAZ16": {
+              "0": "content",
+              "1": "time"
+            }
+          }
+        },
+        "expected": {
+          "type": "rule_relativeTime",
+          "rules": {
+            "relativeTime": {
+              "from": "first monday eight months later"
+            },
+            "expected": {
+              "content": "Apply for Transportation Access Pass (TAP) CharlieCard non-auto approval",
+              "time": "{MonthFull} {Day0D}, 10:15 AM"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "c3_check_direct_json_object",
+      "channel": "cdp",
+      "description": "check_direct_json_object over active_tab_html_parse",
+      "osworld": {
+        "func": "check_direct_json_object",
+        "result": {
+          "type": "active_tab_html_parse",
+          "category": "input",
+          "inputObject": {
+            "/html/body/div[2]/div/form/div[7]/div/div/div[1]/input[1]": "name",
+            "/html/body/div[2]/div/form/div[7]/div/div/div[1]/input[2]": "mail"
+          }
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "expected": {
+              "name": "James Smith",
+              "mail": "james.smith@gmail.com"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "warnings": [],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\chrome\\da46d875-6b82-4681-9284-653b0c7ae241.json",
+  "domain": "chrome"
+}

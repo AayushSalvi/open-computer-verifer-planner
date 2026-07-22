@@ -1,0 +1,141 @@
+{
+  "task_id": "3f05f3b9-29ba-4b6b-95aa-2204697ffc06",
+  "source": "osworld",
+  "instruction": "I have a collection of MP3s with blank meta data, but already named with their artists and titles. I've heard that Picard or Kid3 may help, but I'm unfamiliar with them. Can you help me to fix the meta data \"title\" and \"artist\"?",
+  "decomposable": true,
+  "checkpoints": [
+    {
+      "id": "c1_check_mp3_meta",
+      "channel": "file",
+      "description": "check_mp3_meta over vm_file",
+      "osworld": {
+        "func": "check_mp3_meta",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Music/Cheng Xiang - Missing You.mp3",
+          "dest": "Cheng Xiang - Missing You.mp3"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "title": {
+              "method": "eq",
+              "ref": "Missing You"
+            },
+            "artist": {
+              "method": "eq",
+              "ref": "Cheng Xiang"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "c2_check_mp3_meta",
+      "channel": "file",
+      "description": "check_mp3_meta over vm_file",
+      "osworld": {
+        "func": "check_mp3_meta",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Music/Han Baoyi - Tears of Dancing Girl.mp3",
+          "dest": "Han Baoyi - Tears of Dancing Girl.mp3"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "title": {
+              "method": "eq",
+              "ref": "Tears of Dancing Girl"
+            },
+            "artist": {
+              "method": "eq",
+              "ref": "Han Baoyi"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "c3_check_mp3_meta",
+      "channel": "file",
+      "description": "check_mp3_meta over vm_file",
+      "osworld": {
+        "func": "check_mp3_meta",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Music/Huang An - I Know Missing is Painful.mp3",
+          "dest": "Huang An - I Know Missing is Painful.mp3"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "title": {
+              "method": "eq",
+              "ref": "I Know Missing is Painful"
+            },
+            "artist": {
+              "method": "eq",
+              "ref": "Huang An"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "c4_check_mp3_meta",
+      "channel": "file",
+      "description": "check_mp3_meta over vm_file",
+      "osworld": {
+        "func": "check_mp3_meta",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Music/Chen Shaohua - Red Daughter.mp3",
+          "dest": "Chen Shaohua - Red Daughter.mp3"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "title": {
+              "method": "eq",
+              "ref": "Red Daughter"
+            },
+            "artist": {
+              "method": "eq",
+              "ref": "Chen Shaohua"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "c5_check_mp3_meta",
+      "channel": "file",
+      "description": "check_mp3_meta over vm_file",
+      "osworld": {
+        "func": "check_mp3_meta",
+        "result": {
+          "type": "vm_file",
+          "path": "/home/user/Music/Zhou Xuan - Nights in Shanghai.mp3",
+          "dest": "Zhou Xuan - Nights in Shanghai.mp3"
+        },
+        "expected": {
+          "type": "rule",
+          "rules": {
+            "title": {
+              "method": "eq",
+              "ref": "Nights in Shanghai"
+            },
+            "artist": {
+              "method": "eq",
+              "ref": "Zhou Xuan"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "warnings": [],
+  "source_path": "..\\SCALE-CUA\\osworld_eval\\evaluation_examples\\examples\\multi_apps\\3f05f3b9-29ba-4b6b-95aa-2204697ffc06.json",
+  "domain": "multi_apps"
+}
