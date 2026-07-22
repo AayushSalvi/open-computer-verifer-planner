@@ -57,7 +57,12 @@ def _eval_predicate(expr: str, result) -> tuple[bool, str | None]:
         return False, f"eval error: {exc}"
 
 
-def _resolve_jsonc_file(sandbox, check: dict) -> dict:
+#: Cap on captured probe output. Config files are small; this only guards
+#: against a checkpoint pointed at something unexpectedly large.
+PROBE_CAPTURE_LIMIT = 4000
+
+
+def _resolve_jsonc_file(sandbox, check: dict, capture_probes: bool = False) -> dict:
     checkpoint_id = check["id"]
     channel = check.get("channel", "file")
     path = check["jsonc_file"]
@@ -98,13 +103,20 @@ def _resolve_jsonc_file(sandbox, check: dict) -> dict:
         # configured state is genuinely not in effect. Keep the raw head as
         # evidence — the sandbox is destroyed at run end, so this is the only
         # surviving diagnostic.
-        return {
+        rec = {
             "id": checkpoint_id,
             "pass": False,
             "status": "ok",
             "evidence": f"{parsed['error'][:100]} | raw: {parsed['raw'][:150]!r}",
             "channel": channel,
         }
+        if capture_probes:
+            # The most valuable trace of all: the file the screen showed as
+            # fine, and the parse failure that proves it is not.
+            rec["probe"] = {"kind": "read_file", "path": path, "parse": "jsonc"}
+            rec["probe_result"] = (raw_text or "")[:PROBE_CAPTURE_LIMIT]
+            rec["probe_result_truncated"] = len(raw_text or "") > PROBE_CAPTURE_LIMIT
+        return rec
 
     result = parsed["data"]
     verdict, err = _eval_predicate(check["eval"], result)
@@ -117,13 +129,22 @@ def _resolve_jsonc_file(sandbox, check: dict) -> dict:
             "channel": channel,
         }
     desc = check.get("description", checkpoint_id)
-    return {
+    record = {
         "id": checkpoint_id,
         "pass": verdict,
         "status": "ok",
         "evidence": f"{desc} => {'confirmed' if verdict else 'not found'}",
         "channel": channel,
     }
+    if capture_probes:
+        # The gold probe trace: what a correct verifier should look at, and
+        # what it would find. This is the demonstration half of an SFT
+        # example -- the verdict alone does not teach the behaviour.
+        raw = raw_text or ""
+        record["probe"] = {"kind": "read_file", "path": path, "parse": "jsonc"}
+        record["probe_result"] = raw[:PROBE_CAPTURE_LIMIT]
+        record["probe_result_truncated"] = len(raw) > PROBE_CAPTURE_LIMIT
+    return record
 
 
 def _resolve_command(sandbox, app_name: str, check: dict) -> dict:
@@ -162,18 +183,26 @@ def _resolve_command(sandbox, app_name: str, check: dict) -> dict:
             "evidence": evidence, "channel": channel}
 
 
-def _resolve(sandbox, app_name: str, check: dict) -> dict:
+def _resolve(sandbox, app_name: str, check: dict, capture_probes: bool = False) -> dict:
     if "jsonc_file" in check:
-        return _resolve_jsonc_file(sandbox, check)
+        return _resolve_jsonc_file(sandbox, check, capture_probes=capture_probes)
     return _resolve_command(sandbox, app_name, check)
 
 
-def run_checkpoints(sandbox, app_name: str, checkpoints_dir) -> list[dict]:
+def run_checkpoints(sandbox, app_name: str, checkpoints_dir,
+                    capture_probes: bool = False) -> list[dict]:
     """Fire every checkpoint for a task against the given live sandbox.
 
     Returns the `conditions` array from the PROJECT.md interface contract:
     a list of {id, pass, status, evidence, channel}. `outcome_consistent`
     is the caller's job (see run_task_with_checkpoints.py).
+
+    `capture_probes=True` additionally records, per condition, the probe that
+    produced the verdict and what it returned. That is the demonstration half
+    of an SFT example -- a verdict on its own shows the answer but not the
+    behaviour that reaches it. Off by default: the RL interface record should
+    stay small, and probe output can carry file contents.
     """
     spec = _load_checkpoints(checkpoints_dir)
-    return [_resolve(sandbox, app_name, check) for check in spec["checkpoints"]]
+    return [_resolve(sandbox, app_name, check, capture_probes=capture_probes)
+            for check in spec["checkpoints"]]
