@@ -80,11 +80,55 @@ def _reset(sandbox) -> None:
     )
 
 
+def _dedupe_probes(conditions: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Group conditions by the probe that answered them.
+
+    Six conditions over two files is TWO reads, not six. Emitting one probe
+    record per condition would duplicate each file's contents three times and,
+    worse, demonstrate "issue a separate probe per condition" -- teaching
+    exactly the inefficiency the validity credit penalises. A competent
+    verifier reads settings.json once and settles all three settings from it,
+    so the demonstration has to show that.
+
+    Returns (probes, conditions) where each condition references a probe by id
+    and no longer carries its own copy of the result.
+    """
+    probes: list[dict] = []
+    by_key: dict[tuple, dict] = {}
+    slim: list[dict] = []
+
+    for c in conditions:
+        cond = {k: v for k, v in c.items()
+                if k not in ("probe", "probe_result", "probe_result_truncated")}
+        p = c.get("probe")
+        if p is None:
+            slim.append(cond)
+            continue
+        key = (p.get("kind"), p.get("path"), p.get("parse"))
+        entry = by_key.get(key)
+        if entry is None:
+            entry = {
+                "id": f"p{len(probes) + 1}",
+                **p,
+                "result": c.get("probe_result", ""),
+                "result_truncated": c.get("probe_result_truncated", False),
+                "answers": [],
+            }
+            by_key[key] = entry
+            probes.append(entry)
+        entry["answers"].append(c["id"])
+        cond["probe_id"] = entry["id"]
+        slim.append(cond)
+
+    return probes, slim
+
+
 def _variant_record(sandbox, app: str, checkpoints_dir: Path, planted: dict,
                     screen_truthful: bool) -> dict:
     conditions = run_checkpoints(sandbox, app, checkpoints_dir, capture_probes=True)
     unmet = [c["id"] for c in conditions if not c["pass"]]
     all_pass = not unmet
+    probes, conditions = _dedupe_probes(conditions)
     return {
         "variant": planted["variant"],
         "screen_is_truthful": screen_truthful,
@@ -96,6 +140,9 @@ def _variant_record(sandbox, app: str, checkpoints_dir: Path, planted: dict,
         "probing_required": not screen_truthful,
         "unmet_conditions": unmet,
         "planted_summary": planted["summary"],
+        # The efficient demonstration: N probes settle M conditions, N < M.
+        "probe_count": len(probes),
+        "probes": probes,
         "conditions": conditions,
     }
 
@@ -141,6 +188,7 @@ def run(app: str, task_id: str, out_dir: Path, golden_styles: list[str], **backe
             rec = _variant_record(sandbox, app, checkpoints_dir, planted, screen_truthful=True)
             records.append(rec)
             print(f"  golden/{style:5s}  verdict={rec['correct_verdict']:8s} "
+                  f"probes={rec['probe_count']}->{len(rec['conditions'])}cond  "
                   f"unmet={rec['unmet_conditions'] or 'none'}")
             if rec["correct_verdict"] != "done":
                 print("    WARNING: golden state did not fully pass -- the truthful "
@@ -154,6 +202,7 @@ def run(app: str, task_id: str, out_dir: Path, golden_styles: list[str], **backe
             rec = _variant_record(sandbox, app, checkpoints_dir, planted, screen_truthful=False)
             records.append(rec)
             print(f"  honeypot/{vdir.name[-28:]:28s} verdict={rec['correct_verdict']:8s} "
+                  f"probes={rec['probe_count']}->{len(rec['conditions'])}cond  "
                   f"unmet={rec['unmet_conditions']}")
             if rec["correct_verdict"] == "done":
                 print("    WARNING: honeypot did not produce a failing verdict -- "
@@ -173,9 +222,12 @@ def run(app: str, task_id: str, out_dir: Path, golden_styles: list[str], **backe
         "built_at": datetime.now().isoformat(),
         "purpose": "verifier cold-start SFT: contrastive screen-truthful vs screen-lying states",
         "pair_counts": {"truthful": len(truthful), "lying": len(lying)},
-        "note": ("Probe traces are the demonstration half: each condition carries the probe "
-                 "issued and what it returned, not just the verdict. Probe encoding is "
-                 "generic (kind/path/parse) -- map onto the verifier's own action schema."),
+        "note": ("Probe traces are the demonstration half: a verdict shows the answer without "
+                 "the behaviour that reaches it. Probes are deduplicated -- each variant lists "
+                 "the unique probes issued and which conditions each one answers, so the "
+                 "demonstration shows N probes settling M conditions rather than one probe per "
+                 "condition. Probe encoding is generic (kind/path/parse); map onto the "
+                 "verifier's own action schema."),
         "variants": records,
     }
     out = out_dir / f"{task_id}_pairs.json"
