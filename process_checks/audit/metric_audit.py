@@ -1,0 +1,243 @@
+"""
+Offline audit of upstream OSWorld evaluator metrics.
+
+WHY
+---
+The collaborator's SFT pipeline uses 0-scored runs as negatives and to build
+preference pairs. So an evaluator that scores a CORRECT trajectory 0 does not
+merely waste a sample: it presents correct behaviour as failure, and ranks it
+below something worse in a pair. Her corpus has 450 zero-scored runs.
+
+We have already confirmed four such false negatives by hand in OSWorld's
+VSCode metrics. This generalises that: a mutation-testing harness over the
+metric layer, run entirely offline.
+
+WHAT IT TESTS
+-------------
+Metrics are pure functions -- metric(result, expected, **options) -> float --
+so they can be exercised with synthetic inputs, no VM, no sandbox, no model.
+Each case supplies:
+
+    correct input   -> must score 1.0   (else FALSE NEGATIVE: the worst kind,
+                                         it mislabels good work as failure)
+    mutated input   -> must score 0.0   (else FALSE POSITIVE: it accepts work
+                                         that was not done)
+
+A metric that fails either direction is reported with the exact input that
+broke it, so the finding is reproducible rather than an assertion.
+
+LOADING THIRD-PARTY CODE
+------------------------
+The metrics package pulls heavy optional deps (a spreadsheet formula engine,
+audio fingerprinting, OpenCV) that most metrics never touch. Rather than
+require all of them, `load_metrics` stubs missing modules on demand and
+reports what it stubbed. Every audited metric is checked against a
+known-correct input first, so a stub cannot silently corrupt a verdict without
+showing up as a false negative.
+
+Run:  python -m process_checks.audit.metric_audit --osworld <path-to-osworld_eval>
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock
+
+STUBBED: set[str] = set()
+
+
+def load_metrics(osworld_root: str, dotted: str, names: list[str], max_stubs: int = 60):
+    """Import metric functions, stubbing missing heavy deps on demand."""
+    root = str(Path(osworld_root).resolve())
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    for _ in range(max_stubs):
+        try:
+            mod = __import__(dotted, fromlist=names)
+            return {n: getattr(mod, n) for n in names if hasattr(mod, n)}
+        except (ModuleNotFoundError, ImportError) as exc:
+            missing = getattr(exc, "name", None)
+            if not missing or missing in STUBBED:
+                raise
+            STUBBED.add(missing)
+            sys.modules[missing] = MagicMock()
+    raise RuntimeError(f"gave up after {max_stubs} stubs loading {dotted}")
+
+
+def write_tmp(text: str, suffix: str = ".json") -> str:
+    f = tempfile.NamedTemporaryFile("w", suffix=suffix, delete=False, encoding="utf-8")
+    f.write(text)
+    f.close()
+    return f.name
+
+
+# --------------------------------------------------------------------------- #
+# Cases
+# --------------------------------------------------------------------------- #
+# Each: (label, callable_name, args_for_correct, args_for_mutated, note)
+# args are built lazily so temp files are only created when the case runs.
+
+def build_cases(M: dict) -> list[dict]:
+    cases: list[dict] = []
+
+    def add(metric, label, correct, mutated, note=""):
+        if metric in M:
+            cases.append({"metric": metric, "label": label, "correct": correct,
+                          "mutated": mutated, "note": note})
+
+    # ---- vscode: settings ---------------------------------------------------
+    exp = {"expected": {"editor.fontSize": 14}}
+    add("check_json_settings", "plain JSON",
+        lambda: (write_tmp('{"editor.fontSize": 14}'), exp),
+        lambda: (write_tmp('{"editor.fontSize": 12}'), exp))
+    add("check_json_settings", "VSCode JSONC (comment header)",
+        lambda: (write_tmp('// settings\n{"editor.fontSize": 14}'), exp),
+        lambda: (write_tmp('// settings\n{"editor.fontSize": 12}'), exp),
+        "VSCode writes comments here; a strict parser cannot read its own default file")
+    add("check_json_settings", "trailing comma",
+        lambda: (write_tmp('{"editor.fontSize": 14,}'), exp),
+        lambda: (write_tmp('{"editor.fontSize": 12,}'), exp),
+        "trailing commas are legal JSONC and VSCode writes them")
+
+    # ---- vscode: keybindings ------------------------------------------------
+    B = '{"key": "ctrl+shift+n", "command": "workbench.action.files.newUntitledFile"}'
+    BW = '{"key": "ctrl+alt+z", "command": "some.other.command"}'
+    expk = {"expected": {"key": "ctrl+shift+n",
+                         "command": "workbench.action.files.newUntitledFile"}}
+    add("check_json_keybindings", "plain array",
+        lambda: (write_tmp(f"[{B}]"), expk),
+        lambda: (write_tmp(f"[{BW}]"), expk))
+    add("check_json_keybindings", "1-line comment header",
+        lambda: (write_tmp(f"// header\n[{B}]"), expk),
+        lambda: (write_tmp(f"// header\n[{BW}]"), expk),
+        "their skip-first-line workaround covers exactly this case")
+    add("check_json_keybindings", "2-line comment header",
+        lambda: (write_tmp(f"// one\n// two\n[{B}]"), expk),
+        lambda: (write_tmp(f"// one\n// two\n[{BW}]"), expk),
+        "the skip-first-line workaround breaks beyond one line")
+    BWHEN = ('{"key": "ctrl+shift+n", "command": "workbench.action.files.newUntitledFile",'
+             ' "when": "editorTextFocus"}')
+    add("check_json_keybindings", "binding carrying a when clause",
+        lambda: (write_tmp(f"[{BWHEN}]"), expk),
+        lambda: (write_tmp(f"[{BW}]"), expk),
+        "exact dict match rejects any binding with an extra field; when clauses are common")
+
+    # ---- general: exact_match ----------------------------------------------
+    add("exact_match", "identical strings",
+        lambda: ("hello", {"expected": "hello"}),
+        lambda: ("hello", {"expected": "goodbye"}))
+
+    # ---- general: check_list ------------------------------------------------
+    # Signature verified against the source: takes a PATH to a list file, and
+    # rules keyed expect/unexpect holding regexes (not `expected`, and not an
+    # in-memory list). Getting this wrong produced a spurious "finding" on the
+    # first run -- a harness that reports its own mistakes as upstream bugs is
+    # worse than no harness, so every case is checked against the real
+    # signature before its verdict is trusted.
+    add("check_list", "expected lines present, unexpected absent",
+        lambda: (write_tmp("alpha\nbeta\n", ".txt"),
+                 {"expect": ["alpha", "beta"], "unexpect": ["gamma"]}),
+        lambda: (write_tmp("alpha\ngamma\n", ".txt"),
+                 {"expect": ["alpha", "beta"], "unexpect": ["gamma"]}))
+
+    # ---- general: check_include_exclude -------------------------------------
+    add("check_include_exclude", "include term present, exclude absent",
+        lambda: ("the operation succeeded", {"include": ["succeeded"], "exclude": ["error"]}),
+        lambda: ("the operation had an error", {"include": ["succeeded"], "exclude": ["error"]}))
+
+    # ---- general: check_direct_json_object ----------------------------------
+    add("check_direct_json_object", "object matches expected keys",
+        lambda: ({"a": "1"}, {"expected": {"a": "1"}}),
+        lambda: ({"a": "2"}, {"expected": {"a": "1"}}))
+
+    # ---- vscode: compare_text_file ------------------------------------------
+    add("compare_text_file", "identical text files",
+        lambda: (write_tmp("line one\nline two\n", ".txt"),
+                 write_tmp("line one\nline two\n", ".txt")),
+        lambda: (write_tmp("line one\nDIFFERENT\n", ".txt"),
+                 write_tmp("line one\nline two\n", ".txt")))
+
+    return cases
+
+
+def score(fn, args) -> tuple[float | None, str | None]:
+    try:
+        v = fn(*args)
+        return (float(v) if v is not None else None), None
+    except Exception as exc:
+        return None, f"{type(exc).__name__}: {exc}"
+
+
+def run_audit(osworld_root: str) -> dict:
+    M: dict = {}
+    M.update(load_metrics(osworld_root, "desktop_env.evaluators.metrics.vscode",
+                          ["check_json_settings", "check_json_keybindings", "compare_text_file"]))
+    M.update(load_metrics(osworld_root, "desktop_env.evaluators.metrics.general",
+                          ["exact_match", "check_list", "check_include_exclude",
+                           "check_direct_json_object"]))
+
+    cases = build_cases(M)
+    findings, ok = [], 0
+
+    print(f"auditing {len(cases)} cases across {len(M)} metrics")
+    if STUBBED:
+        print(f"auto-stubbed missing deps: {', '.join(sorted(STUBBED))}")
+    print()
+
+    for c in cases:
+        fn = M[c["metric"]]
+        good, gerr = score(fn, c["correct"]())
+        bad, berr = score(fn, c["mutated"]())
+
+        false_neg = gerr is not None or (good is not None and good < 1.0)
+        false_pos = berr is None and bad is not None and bad >= 1.0
+
+        label = f"{c['metric']}  [{c['label']}]"
+        if false_neg or false_pos:
+            kinds = []
+            if false_neg:
+                kinds.append("FALSE NEGATIVE (correct input scored "
+                             f"{gerr or good})")
+            if false_pos:
+                kinds.append(f"FALSE POSITIVE (wrong input scored {bad})")
+            print(f"  XX {label}")
+            for k in kinds:
+                print(f"       {k}")
+            if c["note"]:
+                print(f"       note: {c['note']}")
+            findings.append({"metric": c["metric"], "case": c["label"],
+                             "correct_score": gerr or good, "mutated_score": berr or bad,
+                             "false_negative": false_neg, "false_positive": false_pos,
+                             "note": c["note"]})
+        else:
+            ok += 1
+            print(f"  OK {label}  (correct={good}, mutated={bad})")
+
+    print(f"\n{ok}/{len(cases)} cases clean, {len(findings)} finding(s)")
+    return {"metrics_loaded": sorted(M), "stubbed": sorted(STUBBED),
+            "cases": len(cases), "clean": ok, "findings": findings}
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--osworld", required=True,
+                   help="path to osworld_eval (contains desktop_env/)")
+    p.add_argument("--out", help="write the report JSON here")
+    a = p.parse_args()
+
+    report = run_audit(a.osworld)
+    if a.out:
+        Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.out).write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print(f"report: {a.out}")
+    # Findings are the product, not an error -- exit 0 so this can run in CI
+    # without the presence of upstream bugs failing the build.
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
