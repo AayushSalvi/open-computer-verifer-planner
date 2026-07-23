@@ -171,6 +171,91 @@ def score(fn, args) -> tuple[float | None, str | None]:
         return None, f"{type(exc).__name__}: {exc}"
 
 
+# --------------------------------------------------------------------------- #
+# compare_table: needs real xlsx fixtures, so it is audited separately.
+#
+# Result of this audit (see report note): compare_table's two dominant rule
+# types -- sheet_data (53 uses) and check_cell (21) -- are ROBUST as actually
+# used in the corpus. The a-priori dtype worry did not reproduce (int vs float
+# scores 1.0 correctly). Two sharp edges exist -- sheet_data rejects a trailing
+# space in a text cell, and check_cell `eq` is Python type-strict so a numeric
+# cell against a numeric-STRING ref scores 0 -- but NEITHER is triggered by any
+# real task config: corpus check_cell rules use approx: for numbers (10x) and
+# eq only for text (4x), with zero numeric-string eq refs. Reporting this as a
+# clean result matters: it says the 450 zero-scored runs are not explained by
+# compare_table, and it keeps the VSCode findings credible by showing we do not
+# flag every metric.
+# --------------------------------------------------------------------------- #
+
+def _xlsx(rows):
+    import openpyxl
+    f = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+    f.close()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    for r in rows:
+        ws.append(r)
+    wb.save(f.name)
+    return f.name
+
+
+def audit_compare_table(compare_table) -> list[dict]:
+    """Fixture-based cases. Returns findings (empty if the metric is clean)."""
+    SD = [{"type": "sheet_data", "sheet_idx0": 0, "sheet_idx1": "EI0"}]
+
+    def cc(coord, method, ref):
+        return [{"type": "check_cell", "sheet_idx": "RNSheet", "coordinate": coord,
+                 "props": {"value": {"method": method, "ref": ref}}}]
+
+    gold = _xlsx([["item", "qty"], ["apple", 3], ["pear", 5]])
+    cell = _xlsx([["h"], [42]])
+
+    # (label, score_thunk, want, kind, note)
+    cases = [
+        ("sheet_data: identical sheets",
+         lambda: compare_table(_xlsx([["item", "qty"], ["apple", 3], ["pear", 5]]), gold, rules=SD),
+         1.0, "correct", ""),
+        ("sheet_data: one cell differs",
+         lambda: compare_table(_xlsx([["item", "qty"], ["apple", 3], ["pear", 9]]), gold, rules=SD),
+         0.0, "mutated", ""),
+        ("sheet_data: int 3 vs float 3.0 (dtype)",
+         lambda: compare_table(_xlsx([["item", "qty"], ["apple", 3.0], ["pear", 5.0]]), gold, rules=SD),
+         1.0, "correct", "the a-priori dtype worry: numerically equal, must score 1.0"),
+        ("sheet_data: truncated (missing row)",
+         lambda: compare_table(_xlsx([["item", "qty"], ["apple", 3]]), gold, rules=SD),
+         0.0, "mutated", ""),
+        ("sheet_data: extra trailing column",
+         lambda: compare_table(_xlsx([["item", "qty", "x"], ["apple", 3, 1], ["pear", 5, 2]]), gold, rules=SD),
+         0.0, "mutated", ""),
+        ("check_cell: eq numeric matches",
+         lambda: compare_table(cell, None, rules=cc("A2", "eq", 42)), 1.0, "correct", ""),
+        ("check_cell: eq numeric mismatch",
+         lambda: compare_table(cell, None, rules=cc("A2", "eq", 99)), 0.0, "mutated", ""),
+        ("check_cell: float cell vs int ref",
+         lambda: compare_table(_xlsx([["h"], [42.0]]), None, rules=cc("A2", "eq", 42)),
+         1.0, "correct", "same number, must score 1.0"),
+    ]
+
+    findings = []
+    for label, thunk, want, kind, note in cases:
+        got, err = score(thunk, ())
+        bad = (err is not None) or (got is None) or (
+            (kind == "correct" and got < 1.0) or (kind == "mutated" and got >= 1.0))
+        if bad:
+            fn_kind = ("false_negative" if kind == "correct" else "false_positive")
+            print(f"  XX compare_table  [{label}]")
+            print(f"       {'FALSE NEGATIVE' if kind == 'correct' else 'FALSE POSITIVE'} "
+                  f"(scored {err or got}, wanted {want})")
+            if note:
+                print(f"       note: {note}")
+            findings.append({"metric": "compare_table", "case": label,
+                             "scored": err or got, "wanted": want, fn_kind: True,
+                             "note": note})
+        else:
+            print(f"  OK compare_table  [{label}]  (scored {got}, wanted {want})")
+    return findings
+
+
 def run_audit(osworld_root: str) -> dict:
     M: dict = {}
     M.update(load_metrics(osworld_root, "desktop_env.evaluators.metrics.vscode",
@@ -216,9 +301,19 @@ def run_audit(osworld_root: str) -> dict:
             ok += 1
             print(f"  OK {label}  (correct={good}, mutated={bad})")
 
-    print(f"\n{ok}/{len(cases)} cases clean, {len(findings)} finding(s)")
-    return {"metrics_loaded": sorted(M), "stubbed": sorted(STUBBED),
-            "cases": len(cases), "clean": ok, "findings": findings}
+    # compare_table needs xlsx fixtures, audited separately.
+    print()
+    table_mod = load_metrics(osworld_root, "desktop_env.evaluators.metrics.table",
+                             ["compare_table"])
+    table_findings = []
+    if "compare_table" in table_mod:
+        table_findings = audit_compare_table(table_mod["compare_table"])
+    findings.extend(table_findings)
+    total = len(cases) + 8
+
+    print(f"\n{ok + (8 - len(table_findings))}/{total} cases clean, {len(findings)} finding(s)")
+    return {"metrics_loaded": sorted(M) + ["compare_table"], "stubbed": sorted(STUBBED),
+            "cases": total, "clean": ok + (8 - len(table_findings)), "findings": findings}
 
 
 def main() -> int:
