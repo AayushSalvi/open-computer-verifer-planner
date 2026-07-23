@@ -160,6 +160,20 @@ def build_cases(M: dict) -> list[dict]:
         lambda: (write_tmp("line one\nDIFFERENT\n", ".txt"),
                  write_tmp("line one\nline two\n", ".txt")))
 
+    # ---- chrome: is_expected_url_pattern_match ------------------------------
+    # result is a URL string (or {"url": ...}); rules["expected"] is a list of
+    # regexes, ALL of which must be found (re.search). 12 corpus uses.
+    urlrule = {"expected": ["reservation#/vehicles"]}
+    add("is_expected_url_pattern_match", "url contains the expected fragment",
+        lambda: ("https://www.hertz.com/rentacar/reservation#/vehicles?x=1", urlrule),
+        lambda: ("https://www.hertz.com/rentacar/reservation#/review", urlrule))
+    add("is_expected_url_pattern_match", "anchored settings pattern",
+        lambda: ("chrome://settings/appearance/", {"expected": [r"^chrome://settings/appearance/?$"]}),
+        lambda: ("chrome://settings/privacy", {"expected": [r"^chrome://settings/appearance/?$"]}))
+    add("is_expected_url_pattern_match", "dict form with 'url' field",
+        lambda: ({"url": "https://example.com/manchester/weather"}, {"expected": ["/manchester/"]}),
+        lambda: ({"url": "https://example.com/london/weather"}, {"expected": ["/manchester/"]}))
+
     return cases
 
 
@@ -263,6 +277,8 @@ def run_audit(osworld_root: str) -> dict:
     M.update(load_metrics(osworld_root, "desktop_env.evaluators.metrics.general",
                           ["exact_match", "check_list", "check_include_exclude",
                            "check_direct_json_object"]))
+    M.update(load_metrics(osworld_root, "desktop_env.evaluators.metrics.chrome",
+                          ["is_expected_url_pattern_match"]))
 
     cases = build_cases(M)
     findings, ok = [], 0
