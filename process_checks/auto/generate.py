@@ -135,7 +135,7 @@ def _load_supplied(path) -> dict:
     return out
 
 
-def run(model: str, supplied: dict | None, write: bool) -> dict:
+def run(model: str, supplied: dict | None, write: bool, max_tokens: int = 6000) -> dict:
     tasks = sorted(TASKS_DIR.glob("vscode_*/task.json"))
     tier = collections.Counter()
     per_task, errors = [], []
@@ -147,7 +147,7 @@ def run(model: str, supplied: dict | None, write: bool) -> dict:
         instruction = task.get("task", "")
         try:
             criteria = decompose(instruction, decomposition=(supplied or {}).get(tid),
-                                 model=model)
+                                 model=model, max_tokens=max_tokens)
         except Exception as exc:  # noqa: BLE001
             errors.append({"task": tid, "error": f"{type(exc).__name__}: {exc}"})
             continue
@@ -184,6 +184,9 @@ def main() -> int:
     p.add_argument("--model", default="qwen3.5-27b")
     p.add_argument("--endpoint-port", type=int, help="local OpenAI-compatible port (sets OPENAI_BASE_URL)")
     p.add_argument("--endpoint-url", type=str)
+    p.add_argument("--max-tokens", type=int, default=6000,
+                   help="model output budget; raise if a reasoning model truncates "
+                        "before emitting the JSON (default 6000)")
     p.add_argument("--decompositions", help="offline: JSONL of {task_id, criteria}")
     p.add_argument("--no-write", action="store_true", help="score only, do not write specs")
     p.add_argument("--out", help="write the run report JSON here")
@@ -195,7 +198,7 @@ def main() -> int:
         os.environ["OPENAI_BASE_URL"] = f"http://localhost:{a.endpoint_port}/v1"
 
     supplied = _load_supplied(a.decompositions) if a.decompositions else None
-    r = run(a.model, supplied, write=not a.no_write)
+    r = run(a.model, supplied, write=not a.no_write, max_tokens=a.max_tokens)
 
     print(f"tasks: {r['tasks']}   decomposed ok: {r['decomposed_ok']}   errors: {len(r['errors'])}")
     print(f"tier totals (criteria): {r['tier_totals']}")

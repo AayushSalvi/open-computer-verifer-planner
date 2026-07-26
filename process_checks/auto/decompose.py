@@ -31,16 +31,25 @@ import re
 
 from process_checks.auto.registry_vscode import op_registry_doc
 
-SYS = """You decompose a GUI-agent TASK into the atomic criteria that must ALL hold for the task to be considered done, then tier each criterion by how its truth can be established. Be complete (cover everything the instruction requires) but not redundant. Extract concrete parameters (key, value, file path, command, prefix) from the instruction into the check when tier T1.
+SYS = """You decompose a GUI-agent TASK into the atomic criteria that must ALL hold for the task to be done, then bind each to a deterministic check when one fits.
 
-Tiers:
-- T1: maps to a deterministic registry op — give op + params (with the extracted expected value/target).
-- T2: the state is readable (a file/app value) but NO registry op fits — mark tier T2 (a getter+judge will handle it).
-- T3: purely visual/spatial with no readable state — tier T3.
+RULES
+- List EVERY criterion the instruction requires — one per distinct requirement. Never use placeholders, "...", "and so on", or example stand-ins. If the task sets 5 settings, emit 5 criteria.
+- If a criterion maps to a registry op below, you MUST tier it T1 and give {op, params} with the concrete value extracted from the instruction. Prefer T1 whenever an op fits — do not down-tier a checkable criterion to T2/T3.
+- T2: the state is readable but NO registry op fits. T3: purely visual/spatial with no readable state. For T2/T3 set "bind": null.
 
-Output STRICT JSON only:
-{"criteria": [{"text": "<atomic criterion>", "tier": "T1|T2|T3", "bind": {"op": "...", "params": {...}}, "note": "<why this tier>"}]}
-For T2/T3, set "bind": null."""
+WORKED EXAMPLE
+INSTRUCTION: Set editor.fontSize to 14 and editor.tabSize to 2. Add a keybinding ctrl+alt+p running workbench.action.showCommands. Create /home/user/app.js containing the text calculateSum.
+OUTPUT:
+{"criteria":[
+{"text":"editor.fontSize is 14","tier":"T1","bind":{"op":"setting_equals","params":{"key":"editor.fontSize","value":14}}},
+{"text":"editor.tabSize is 2","tier":"T1","bind":{"op":"setting_equals","params":{"key":"editor.tabSize","value":2}}},
+{"text":"ctrl+alt+p bound to workbench.action.showCommands","tier":"T1","bind":{"op":"keybinding_bound","params":{"key":"ctrl+alt+p","command":"workbench.action.showCommands"}}},
+{"text":"/home/user/app.js exists","tier":"T1","bind":{"op":"file_exists","params":{"path":"/home/user/app.js"}}},
+{"text":"app.js contains calculateSum","tier":"T1","bind":{"op":"file_contains","params":{"path":"/home/user/app.js","substring":"calculateSum"}}}
+]}
+
+OUTPUT FORMAT: a single STRICT JSON object with a "criteria" list, double-quoted keys and strings. Any reasoning must come BEFORE the JSON; end your response with the JSON object."""
 
 
 def build_user_prompt(instruction: str) -> str:
@@ -148,7 +157,7 @@ def _call_openai(instruction: str, model: str, max_tokens: int) -> list[dict]:
 
 
 def decompose(instruction: str, *, decomposition: list[dict] | None = None,
-              model: str = "qwen3.5-27b", max_tokens: int = 1600) -> list[dict]:
+              model: str = "qwen3.5-27b", max_tokens: int = 6000) -> list[dict]:
     """Return a criteria list for an instruction.
 
     `decomposition` bypasses the model (offline / hand-authored). Otherwise the
