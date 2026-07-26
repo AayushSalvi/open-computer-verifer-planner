@@ -126,7 +126,13 @@ def _parse_criteria(raw: str) -> list[dict]:
         obj = _try_load(obj_text)
         if isinstance(obj, dict) and isinstance(obj.get("criteria"), list):
             return obj["criteria"]
-    raise ValueError(f"no JSON object with a 'criteria' list; raw[:300]={raw[:300]!r}")
+    # Head + tail + length make truncation (tail is mid-reasoning, no closing
+    # brace) distinguishable from malformed JSON (tail is broken JSON) without a
+    # second slow round-trip.
+    raise ValueError(
+        f"no 'criteria' object; len={len(raw)} "
+        f"head={raw[:160]!r} tail={raw[-160:]!r}"
+    )
 
 
 def _call_openai(instruction: str, model: str, max_tokens: int,
@@ -175,7 +181,7 @@ def _call_openai(instruction: str, model: str, max_tokens: int,
 
 
 def decompose(instruction: str, *, decomposition: list[dict] | None = None,
-              model: str = "qwen3.5-27b", max_tokens: int = 6000) -> list[dict]:
+              model: str = "qwen3.5-27b", max_tokens: int = 12000) -> list[dict]:
     """Return a criteria list for an instruction.
 
     `decomposition` bypasses the model (offline / hand-authored). Otherwise the

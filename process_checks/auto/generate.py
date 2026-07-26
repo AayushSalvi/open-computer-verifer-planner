@@ -135,7 +135,7 @@ def _load_supplied(path) -> dict:
     return out
 
 
-def run(model: str, supplied: dict | None, write: bool, max_tokens: int = 6000) -> dict:
+def run(model: str, supplied: dict | None, write: bool, max_tokens: int = 12000) -> dict:
     tasks = sorted(TASKS_DIR.glob("vscode_*/task.json"))
     tier = collections.Counter()
     per_task, errors = [], []
@@ -184,7 +184,7 @@ def main() -> int:
     p.add_argument("--model", default="qwen3.5-27b")
     p.add_argument("--endpoint-port", type=int, help="local OpenAI-compatible port (sets OPENAI_BASE_URL)")
     p.add_argument("--endpoint-url", type=str)
-    p.add_argument("--max-tokens", type=int, default=6000,
+    p.add_argument("--max-tokens", type=int, default=12000,
                    help="model output budget; raise if a reasoning model truncates "
                         "before emitting the JSON (default 6000)")
     p.add_argument("--decompositions", help="offline: JSONL of {task_id, criteria}")
