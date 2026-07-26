@@ -24,9 +24,10 @@ registry would swap in the same way.
 """
 from __future__ import annotations
 
+import ast
 import json
 import os
-from pathlib import Path
+import re
 
 from process_checks.auto.registry_vscode import op_registry_doc
 
@@ -48,16 +49,74 @@ def build_user_prompt(instruction: str) -> str:
             f"Decompose this task into atomic criteria and tier each. JSON only.")
 
 
+def _strip_wrappers(raw: str) -> str:
+    """Remove reasoning tags and markdown code fences a model may wrap around
+    its JSON. Qwen-family models often emit <think>...</think> and/or ```json."""
+    raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL | re.IGNORECASE)
+    # ```json ... ```  or  ``` ... ```
+    fence = re.search(r"```(?:json)?\s*(.*?)```", raw, flags=re.DOTALL)
+    if fence:
+        raw = fence.group(1)
+    return raw.strip()
+
+
+def _iter_balanced_objects(text: str):
+    """Yield every brace-balanced {...} region (string-aware), left to right.
+
+    Naive first-{/last-} breaks when reasoning/prose contains stray braces
+    (e.g. "the breakdown {note}: {...real json...}"), so we consider each
+    candidate and let the caller pick the one that actually parses.
+    """
+    start = text.find("{")
+    while start != -1:
+        depth, i, in_str, esc = 0, start, False, False
+        while i < len(text):
+            c = text[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif c == "\\":
+                    esc = True
+                elif c == '"':
+                    in_str = False
+            elif c == '"':
+                in_str = True
+            elif c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    yield text[start:i + 1]
+                    break
+            i += 1
+        start = text.find("{", start + 1)
+
+
+def _try_load(obj_text: str):
+    try:
+        return json.loads(obj_text)
+    except json.JSONDecodeError:
+        try:
+            return ast.literal_eval(obj_text)  # single quotes / py literals
+        except (ValueError, SyntaxError):
+            return None
+
+
 def _parse_criteria(raw: str) -> list[dict]:
-    """Pull the JSON object out of a model response (first { to last })."""
-    s, e = raw.find("{"), raw.rfind("}")
-    if s < 0 or e <= s:
-        raise ValueError("no JSON object in model output")
-    obj = json.loads(raw[s:e + 1])
-    crit = obj.get("criteria")
-    if not isinstance(crit, list):
-        raise ValueError("parsed object has no 'criteria' list")
-    return crit
+    """Extract the criteria list from a model response, tolerantly.
+
+    Strip wrappers, then try each balanced {...} region until one parses to a
+    dict carrying a 'criteria' list (json first, then ast.literal_eval for
+    single-quoted Python-style output). Raises ValueError with a raw snippet on
+    total failure, so a parse bug is diagnosable from the error alone.
+    """
+    cleaned = _strip_wrappers(raw)
+    candidates = list(_iter_balanced_objects(cleaned)) or [cleaned]
+    for obj_text in candidates:
+        obj = _try_load(obj_text)
+        if isinstance(obj, dict) and isinstance(obj.get("criteria"), list):
+            return obj["criteria"]
+    raise ValueError(f"no JSON object with a 'criteria' list; raw[:300]={raw[:300]!r}")
 
 
 def _call_openai(instruction: str, model: str, max_tokens: int) -> list[dict]:
