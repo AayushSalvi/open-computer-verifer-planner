@@ -218,13 +218,26 @@ def criteria_to_checkpoints(task_id: str, criteria: list[dict]) -> dict:
     a getter+judge or are unverifiable) — carried through so the automation
     rate and the residual are both visible.
     """
-    checkpoints, deferred = [], []
+    checkpoints, deferred, malformed = [], [], []
     for i, c in enumerate(criteria, 1):
+        # Models sometimes emit placeholders (a bare `...`) or stray non-dict
+        # items in the criteria list. Skip them rather than crash — one junk
+        # entry must not discard a task's valid criteria — but record the count
+        # so a sloppy decomposition is visible, not silent.
+        if not isinstance(c, dict):
+            malformed.append(repr(c)[:40])
+            continue
         tier = c.get("tier")
         note = c.get("text", "")
-        if tier == "T1" and c.get("bind"):
+        if tier == "T1" and isinstance(c.get("bind"), dict):
             cid = f"m{i}_{_slug(note)}"
-            checkpoints.append(bind_to_checkpoint(c["bind"], cid, note))
+            try:
+                checkpoints.append(bind_to_checkpoint(c["bind"], cid, note))
+            except RegistryError as exc:
+                # bind names an op we don't have, or is missing params: treat as
+                # deferred (a gap to fill), not a crash.
+                deferred.append({"criterion": note, "tier": "T1?",
+                                 "reason": f"unbindable: {exc}"})
         else:
             deferred.append({"criterion": note, "tier": tier,
                              "reason": c.get("note", "")})
@@ -234,9 +247,11 @@ def criteria_to_checkpoints(task_id: str, criteria: list[dict]) -> dict:
         "source": "auto",
         "checkpoints": checkpoints,
         "deferred": deferred,
+        "malformed": malformed,
         "tier_counts": {
             "T1": len(checkpoints),
             "T2/T3": len(deferred),
+            "malformed": len(malformed),
             "total": len(criteria),
         },
     }
