@@ -28,6 +28,7 @@ import ast
 import json
 import os
 import re
+import time
 
 from process_checks.auto.registry_vscode import op_registry_doc
 
@@ -128,7 +129,8 @@ def _parse_criteria(raw: str) -> list[dict]:
     raise ValueError(f"no JSON object with a 'criteria' list; raw[:300]={raw[:300]!r}")
 
 
-def _call_openai(instruction: str, model: str, max_tokens: int) -> list[dict]:
+def _call_openai(instruction: str, model: str, max_tokens: int,
+                 timeout: float = 600, attempts: int = 4) -> list[dict]:
     try:
         import openai
     except ModuleNotFoundError as exc:
@@ -137,13 +139,24 @@ def _call_openai(instruction: str, model: str, max_tokens: int) -> list[dict]:
             "cannot decompose without a model"
         ) from exc
     base_url = os.environ.get("OPENAI_BASE_URL")  # set by --endpoint-port on the server
+    # A reasoning model emitting up to `max_tokens` of thinking + JSON can take
+    # minutes; 180s was too short for the complex tasks. Retry transient
+    # network/timeout errors with backoff (the shared vLLM occasionally drops
+    # connections); do NOT retry a parse failure (deterministic — a retry just
+    # wastes a slow call).
     client = openai.OpenAI(
         base_url=base_url,
         api_key=os.environ.get("OPENAI_API_KEY", "EMPTY"),  # vLLM ignores the value
-        timeout=180,
+        timeout=timeout,
     )
+    transient = (
+        getattr(openai, "APITimeoutError", ()),
+        getattr(openai, "APIConnectionError", ()),
+        getattr(openai, "InternalServerError", ()),
+    )
+    transient = tuple(t for t in transient if isinstance(t, type))
     last_err = None
-    for _ in range(2):  # one retry, as hers does
+    for attempt in range(attempts):
         try:
             resp = client.chat.completions.create(
                 model=model, max_tokens=max_tokens, temperature=0,
@@ -151,8 +164,13 @@ def _call_openai(instruction: str, model: str, max_tokens: int) -> list[dict]:
                           {"role": "user", "content": build_user_prompt(instruction)}],
             )
             return _parse_criteria(resp.choices[0].message.content or "")
-        except Exception as exc:  # noqa: BLE001
+        except transient as exc:
             last_err = exc
+            time.sleep(2 ** attempt)  # 1, 2, 4, 8s backoff
+        except Exception as exc:  # noqa: BLE001 — parse / other: one retry only
+            last_err = exc
+            if attempt >= 1:
+                break
     raise RuntimeError(f"decompose model call failed: {last_err}")
 
 
