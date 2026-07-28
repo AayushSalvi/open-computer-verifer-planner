@@ -88,10 +88,14 @@ def _preflight(task_id: str, criteria: list) -> tuple[dict, dict, list[str]]:
     return spec, golden, blocking
 
 
-def _emit(fh, rec: dict, results: list) -> None:
+# stages we never retry on resume; everything else (errors) is retried
+TERMINAL_OK = {"validated", "skipped"}
+
+
+def _emit(fh, rec: dict, latest: dict) -> None:
     fh.write(json.dumps(rec) + "\n")
     fh.flush()
-    results.append(rec)
+    latest[rec["task"]] = rec
     tag = rec.get("stage", "?")
     extra = ""
     if rec.get("stage") == "validated":
@@ -107,14 +111,16 @@ def _emit(fh, rec: dict, results: list) -> None:
 
 def run(task_ids: list[str], *, model: str, supplied: dict, backend: str,
         malformed: bool, out_jsonl: Path) -> list[dict]:
-    results: list[dict] = []
-    done: set[str] = set()
+    # latest-wins: a task's most recent line is its state. Only validated/skipped
+    # are terminal; error lines are retried (a 404 or a crashed sandbox is
+    # transient/fixable, not a permanent verdict).
+    latest: dict[str, dict] = {}
     if out_jsonl.exists():
         for line in out_jsonl.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 r = json.loads(line)
-                done.add(r["task"])
-                results.append(r)
+                latest[r["task"]] = r
+    done = {t for t, r in latest.items() if r.get("stage") in TERMINAL_OK}
     fh = out_jsonl.open("a", encoding="utf-8")
     try:
         for tid in task_ids:
@@ -127,7 +133,7 @@ def run(task_ids: list[str], *, model: str, supplied: dict, backend: str,
             except FileNotFoundError:
                 rec["stage"] = "load_error"
                 rec["error"] = "task.json not found"
-                _emit(fh, rec, results)
+                _emit(fh, rec, latest)
                 continue
 
             criteria = supplied.get(tid)
@@ -137,7 +143,7 @@ def run(task_ids: list[str], *, model: str, supplied: dict, backend: str,
                 except Exception as exc:  # noqa: BLE001
                     rec["stage"] = "decompose_error"
                     rec["error"] = f"{type(exc).__name__}: {exc}"
-                    _emit(fh, rec, results)
+                    _emit(fh, rec, latest)
                     continue
 
             spec, golden, blocking = _preflight(tid, criteria)
@@ -146,7 +152,7 @@ def run(task_ids: list[str], *, model: str, supplied: dict, backend: str,
             if blocking:
                 rec["stage"] = "skipped"
                 rec["reason"] = ";".join(blocking)
-                _emit(fh, rec, results)
+                _emit(fh, rec, latest)
                 continue
 
             try:
@@ -164,10 +170,10 @@ def run(task_ids: list[str], *, model: str, supplied: dict, backend: str,
             except Exception as exc:  # noqa: BLE001
                 rec["stage"] = "validate_error"
                 rec["error"] = f"{type(exc).__name__}: {exc}"
-            _emit(fh, rec, results)
+            _emit(fh, rec, latest)
     finally:
         fh.close()
-    return results
+    return list(latest.values())
 
 
 def summarise(results: list[dict]) -> dict:
@@ -190,7 +196,9 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--tasks", nargs="*", help="subset of task ids (default: all vscode_*)")
-    p.add_argument("--model", default="qwen3.5-27b")
+    p.add_argument("--model", default="Qwen/Qwen3.5-27B",
+                   help="served model id; the plain 'qwen3.5-27b' alias 404s. "
+                        "Confirm with: curl -s localhost:PORT/v1/models")
     p.add_argument("--endpoint-port", type=int, help="vLLM port for live decompose (model is on 8112)")
     p.add_argument("--decompositions", help="offline JSONL {task_id, criteria}; skips the model")
     p.add_argument("--env-backend", default="docker")
