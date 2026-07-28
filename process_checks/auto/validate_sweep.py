@@ -122,7 +122,13 @@ def run(task_ids: list[str], *, model: str, supplied: dict, backend: str,
                 print(f"  [skip-done] {tid}", flush=True)
                 continue
             rec: dict = {"task": tid}
-            task = _load_task(tid)
+            try:
+                task = _load_task(tid)
+            except FileNotFoundError:
+                rec["stage"] = "load_error"
+                rec["error"] = "task.json not found"
+                _emit(fh, rec, results)
+                continue
 
             criteria = supplied.get(tid)
             if criteria is None:
@@ -195,7 +201,12 @@ def main() -> int:
     if a.endpoint_port:
         os.environ["OPENAI_BASE_URL"] = f"http://localhost:{a.endpoint_port}/v1"
 
-    task_ids = a.tasks or _all_vscode_task_ids()
+    known = set(_all_vscode_task_ids())
+    task_ids = a.tasks or sorted(known)
+    unknown = [t for t in task_ids if t not in known]
+    if unknown:
+        print(f"WARNING: {len(unknown)} unknown task id(s) will be skipped: {unknown}", flush=True)
+        task_ids = [t for t in task_ids if t in known]
     supplied = _load_decomps(a.decompositions)
     out_jsonl = Path(a.out)
     out_jsonl.parent.mkdir(parents=True, exist_ok=True)
