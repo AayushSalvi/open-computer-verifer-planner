@@ -89,14 +89,20 @@ def op_registry_doc() -> str:
 # --------------------------------------------------------------------------- #
 
 def _jsonc_settings(cid, note, path, key, value, channel="file"):
-    """settings-style: result is a dict, result.get(key) == value."""
+    """settings-style: result is a dict, result.get(key) == value.
+
+    The expected value is embedded with repr(), NOT json.dumps(): the eval runs
+    as Python, and json.dumps(True) -> "true" is invalid Python (NameError).
+    Values come from a JSON-parsed decomposition, so they are already Python
+    literals (True / 14 / "block") and repr() renders each as valid Python.
+    """
     return {
         "id": cid,
         "description": note,
         "channel": channel,
         "jsonc_file": path,
         "eval": (f"isinstance(result, dict) and "
-                 f"result.get({key!r}) == {json.dumps(value)}"),
+                 f"result.get({key!r}) == {value!r}"),
     }
 
 
