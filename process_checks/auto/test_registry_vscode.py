@@ -10,7 +10,7 @@ import importlib.util, json, sys
 from dataclasses import dataclass
 from pathlib import Path
 
-REPO = Path("C:/Data_science_projects/research_task/OS-world2/orchestrator/OpenComputer")
+REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from computer_env.backends.base import CommandExitException           # noqa: E402
