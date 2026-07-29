@@ -92,6 +92,101 @@ def _preflight(task_id: str, criteria: list) -> tuple[dict, dict, list[str]]:
 TERMINAL_OK = {"validated", "skipped"}
 
 
+def _ascii(s: str) -> str:
+    """Console-safe: task instructions contain arrows/unicode that a Windows
+    cp1252 stdout cannot encode. Linux utf-8 is fine, but strip for portability."""
+    return str(s).encode("ascii", "replace").decode("ascii")
+
+
+def _authored_ops(task: dict):
+    import collections
+    from process_checks.auto.coverage import _CMD_TO_OP
+    fams = collections.Counter()
+    for check in task.get("verification", []):
+        if check.get("judge") == "llm":
+            fams["<llm-judge>"] += 1
+            continue
+        cmd = check.get("command", "")
+        if cmd:
+            head = cmd.split()[0]
+            fams[_CMD_TO_OP.get(head, f"<unknown:{head}>")] += 1
+    return fams
+
+
+def explain(task_id: str, criteria: list) -> None:
+    """Diagnose a task: show each decomposed criterion's fate and classify every
+    skip as MODEL (bad/incomplete/hallucinated criterion), CODE (we have the op
+    but a planter gap / merge error), or BY-DESIGN (genuinely unplantable)."""
+    from process_checks.auto.registry_vscode import OP_DOC
+    from process_checks.auto.golden_vscode import _PLANTERS, _UNPLANTABLE
+
+    valid_ops = set(OP_DOC)
+    task = _load_task(task_id)
+    spec = criteria_to_checkpoints(task_id, criteria)
+    golden = criteria_to_golden(criteria)
+
+    print(f"\n=== EXPLAIN {task_id} ===")
+    print(f"instruction: {_ascii(task.get('task','')[:280])}")
+    print(f"\nauthored verification wants (op -> count): {dict(_authored_ops(task))}")
+
+    print(f"\nDECOMPOSED CRITERIA ({len(criteria)}):")
+    for i, c in enumerate(criteria, 1):
+        if not isinstance(c, dict):
+            print(f"  {i}. <non-dict criterion> {repr(c)[:50]}")
+            continue
+        b = c.get("bind") or {}
+        print(f"  {i}. [{c.get('tier')}] {b.get('op')} {b.get('params') or {}}"
+              f"   -- {_ascii(c.get('text','')[:48])}")
+
+    print(f"\nBINDER: {len(spec['checkpoints'])} checkpoints, "
+          f"{len(spec['deferred'])} deferred, {len(spec['malformed'])} malformed")
+    for d in spec["deferred"]:
+        print(f"  DEFERRED (no checkpoint): {d.get('criterion','')[:40]!r} — {d.get('reason','')}")
+
+    print(f"\nPLANTER: {len(golden['files'])} files "
+          f"({[p.split('/')[-1] for p in golden['files']]}), "
+          f"{len(golden['unplantable'])} unplantable, {len(golden['skipped'])} skipped")
+    for u in golden["unplantable"]:
+        print(f"  UNPLANTABLE: op={u['op']}  -> BY-DESIGN (no file can fake this)")
+    for s in golden["skipped"]:
+        op, reason = s["op"], s["reason"]
+        if op not in valid_ops:
+            verdict = "MODEL — op not in the registry (hallucinated/unknown op)"
+        elif op in _UNPLANTABLE:
+            verdict = "BY-DESIGN — unplantable by file"
+        elif op not in _PLANTERS:
+            verdict = "CODE — registry has the op but no planter (binder/planter asymmetry)"
+        elif reason == "no planter":
+            verdict = "CODE — no planter for a registry op"
+        elif reason.startswith("'") or "KeyError" in reason:
+            verdict = "MODEL — op valid but params incomplete"
+        else:
+            verdict = "CODE — golden merge/serialize error (GoldenError)"
+        print(f"  SKIPPED plant: op={op}  reason={reason!r}  -> {verdict}")
+
+    # family-level: authored kinds we produced nothing for (a decompose miss)
+    produced = set()
+    for cp in spec["checkpoints"]:
+        cmd = cp.get("command", "")
+        if cmd:
+            from process_checks.auto.coverage import _CMD_TO_OP
+            produced.add(_CMD_TO_OP.get(cmd.split()[0]))
+        else:
+            f = cp.get("jsonc_file", "")
+            if "keybindings.json" in f: produced.add("keybinding_bound")
+            elif "/snippets/" in f: produced.add("snippet_exists")
+            elif "/.vscode/settings.json" in f: produced.add("workspace_setting_equals")
+            elif "settings.json" in f: produced.add("setting_equals")
+    authored = {op for op in _authored_ops(task) if not op.startswith("<")}
+    missed = sorted(authored - produced)
+    if missed:
+        print(f"\nFAMILY MISS: authored wants {missed} but decompose produced no such op")
+        print("  -> MODEL (decompose failed to extract this kind) or COVERAGE "
+              "(registry lacks the op). Check if the op is in the registry above.")
+    else:
+        print("\nFAMILY: every authored op-kind has a produced checkpoint.")
+
+
 def _emit(fh, rec: dict, latest: dict) -> None:
     fh.write(json.dumps(rec) + "\n")
     fh.flush()
@@ -204,10 +299,21 @@ def main() -> int:
     p.add_argument("--env-backend", default="docker")
     p.add_argument("--malformed", action="store_true")
     p.add_argument("--out", default="process_checks/runs/vscode_sweep.jsonl")
+    p.add_argument("--explain", metavar="TASK",
+                   help="diagnose one task offline (decompose + classify skips), no sandbox")
     a = p.parse_args()
 
     if a.endpoint_port:
         os.environ["OPENAI_BASE_URL"] = f"http://localhost:{a.endpoint_port}/v1"
+
+    if a.explain:
+        supplied = _load_decomps(a.decompositions)
+        criteria = supplied.get(a.explain)
+        if criteria is None:
+            task = _load_task(a.explain)
+            criteria = decompose(task.get("task", ""), model=a.model)
+        explain(a.explain, criteria)
+        return 0
 
     known = set(_all_vscode_task_ids())
     task_ids = a.tasks or sorted(known)
