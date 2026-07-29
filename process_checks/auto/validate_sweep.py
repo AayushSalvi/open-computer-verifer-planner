@@ -64,11 +64,41 @@ def _load_decomps(path: str | None) -> dict:
     return out
 
 
-def _preflight(task_id: str, criteria: list) -> tuple[dict, dict, list[str]]:
+# a criterion writes VSCode config/state (in-scope) vs arbitrary project files
+_CONFIG_MARKERS = ("/.vscode/", "/.config/Code/")
+
+
+def _is_content_task(criteria: list) -> bool:
+    """A content-creation task (scaffold a project / write source files) rather
+    than a config-state task. Signalled by a strict majority of T1 criteria being
+    raw file_exists/file_contains on non-config paths. These are a different
+    verification problem — arbitrary code content, new directory trees — that our
+    config-state planter models poorly (synthetic keyword files) and where the
+    authored verifier's own content checks are loose. Classified out so the
+    config-state results stay clean; validate them explicitly with --validate-content."""
+    t1 = [c for c in criteria if isinstance(c, dict) and c.get("tier") == "T1"
+          and isinstance(c.get("bind"), dict)]
+    if not t1:
+        return False
+
+    def _content(c):
+        b = c["bind"]
+        if b.get("op") not in ("file_exists", "file_contains"):
+            return False
+        path = (b.get("params") or {}).get("path", "")
+        return not any(m in path for m in _CONFIG_MARKERS)
+
+    return sum(_content(c) for c in t1) * 2 > len(t1)
+
+
+def _preflight(task_id: str, criteria: list, *, include_content: bool = False) -> tuple[dict, dict, list[str]]:
     """Structural checks before spending a sandbox. Returns (spec, golden, blocking)
     where `blocking` lists reasons this task can't be validated model-free."""
     task = _load_task(task_id)
     blocking: list[str] = []
+
+    if not include_content and _is_content_task(criteria):
+        blocking.append("content_task")
 
     if any(c.get("judge") == "llm" for c in task.get("verification", [])):
         blocking.append("llm_checks")
@@ -205,7 +235,8 @@ def _emit(fh, rec: dict, latest: dict) -> None:
 
 
 def run(task_ids: list[str], *, model: str, supplied: dict, backend: str,
-        malformed: bool, out_jsonl: Path) -> list[dict]:
+        malformed: bool, out_jsonl: Path, cache_path: Path,
+        refresh: bool = False, include_content: bool = False) -> list[dict]:
     # latest-wins: a task's most recent line is its state. Only validated/skipped
     # are terminal; error lines are retried (a 404 or a crashed sandbox is
     # transient/fixable, not a permanent verdict).
@@ -216,6 +247,18 @@ def run(task_ids: list[str], *, model: str, supplied: dict, backend: str,
                 r = json.loads(line)
                 latest[r["task"]] = r
     done = {t for t, r in latest.items() if r.get("stage") in TERMINAL_OK}
+
+    # decomposition cache: {task_id: criteria}, last-wins. A criterion captured
+    # once is reused offline forever, so the sweep stops being hostage to the
+    # flaky shared model — after one good window, re-validation needs no model.
+    cache: dict[str, list] = {}
+    if cache_path.exists():
+        for line in cache_path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                cache[r["task_id"]] = r["criteria"]
+    cache_fh = cache_path.open("a", encoding="utf-8")
+
     fh = out_jsonl.open("a", encoding="utf-8")
     try:
         for tid in task_ids:
@@ -231,17 +274,28 @@ def run(task_ids: list[str], *, model: str, supplied: dict, backend: str,
                 _emit(fh, rec, latest)
                 continue
 
+            # criteria source: explicit --decompositions > cache > live model
             criteria = supplied.get(tid)
+            src = "supplied"
+            if criteria is None and not refresh:
+                criteria = cache.get(tid)
+                src = "cache"
             if criteria is None:
                 try:
                     criteria = decompose(task.get("task", ""), model=model)
+                    src = "model"
                 except Exception as exc:  # noqa: BLE001
                     rec["stage"] = "decompose_error"
                     rec["error"] = f"{type(exc).__name__}: {exc}"
                     _emit(fh, rec, latest)
                     continue
+                # persist a freshly-decomposed criteria set for offline reuse
+                cache[tid] = criteria
+                cache_fh.write(json.dumps({"task_id": tid, "criteria": criteria}) + "\n")
+                cache_fh.flush()
+            rec["decomp_src"] = src
 
-            spec, golden, blocking = _preflight(tid, criteria)
+            spec, golden, blocking = _preflight(tid, criteria, include_content=include_content)
             rec["n_checkpoints"] = len(spec["checkpoints"])
             rec["blocking"] = blocking
             if blocking:
@@ -268,6 +322,7 @@ def run(task_ids: list[str], *, model: str, supplied: dict, backend: str,
             _emit(fh, rec, latest)
     finally:
         fh.close()
+        cache_fh.close()
     return list(latest.values())
 
 
@@ -275,15 +330,19 @@ def summarise(results: list[dict]) -> dict:
     validated = [r for r in results if r.get("stage") == "validated"]
     golden_pass = [r for r in validated if r.get("golden_gate")]
     false_accepts = [r for r in validated if r.get("false_accepts")]
+    skipped = [r for r in results if r.get("stage") == "skipped"]
+    content = [r["task"] for r in skipped if "content_task" in (r.get("reason") or "")]
     return {
         "tasks": len(results),
         "validated": len(validated),
         "golden_gate_pass": len(golden_pass),
         "golden_gate_fail": [r["task"] for r in validated if not r.get("golden_gate")],
         "tasks_with_false_accepts": len(false_accepts),
+        "content_tasks_classified_out": content,
         "decompose_error": [r["task"] for r in results if r.get("stage") == "decompose_error"],
-        "skipped": [{"task": r["task"], "reason": r.get("reason")} for r in results if r.get("stage") == "skipped"],
+        "skipped": [{"task": r["task"], "reason": r.get("reason")} for r in skipped],
         "validate_error": [{"task": r["task"], "error": r.get("error")} for r in results if r.get("stage") == "validate_error"],
+        "criteria_from_cache": [r["task"] for r in results if r.get("decomp_src") == "cache"],
     }
 
 
@@ -299,6 +358,13 @@ def main() -> int:
     p.add_argument("--env-backend", default="docker")
     p.add_argument("--malformed", action="store_true")
     p.add_argument("--out", default="process_checks/runs/vscode_sweep.jsonl")
+    p.add_argument("--decomp-cache", default="process_checks/runs/vscode_decomps.jsonl",
+                   help="persist each successful decompose here and reuse it offline "
+                        "next run — decouples the sweep from the flaky shared model")
+    p.add_argument("--refresh-decomp", action="store_true",
+                   help="ignore the cache and re-decompose live")
+    p.add_argument("--validate-content", action="store_true",
+                   help="also validate content-creation tasks (default: classified out)")
     p.add_argument("--explain", metavar="TASK",
                    help="diagnose one task offline (decompose + classify skips), no sandbox")
     a = p.parse_args()
@@ -324,10 +390,15 @@ def main() -> int:
     supplied = _load_decomps(a.decompositions)
     out_jsonl = Path(a.out)
     out_jsonl.parent.mkdir(parents=True, exist_ok=True)
+    cache_path = Path(a.decomp_cache)
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"sweeping {len(task_ids)} VSCode task(s); resumable -> {out_jsonl}\n", flush=True)
+    print(f"sweeping {len(task_ids)} VSCode task(s); resumable -> {out_jsonl}"
+          f"\ndecomp cache -> {cache_path}\n", flush=True)
     results = run(task_ids, model=a.model, supplied=supplied,
-                  backend=a.env_backend, malformed=a.malformed, out_jsonl=out_jsonl)
+                  backend=a.env_backend, malformed=a.malformed, out_jsonl=out_jsonl,
+                  cache_path=cache_path, refresh=a.refresh_decomp,
+                  include_content=a.validate_content)
 
     s = summarise(results)
     print("\n=== SWEEP SUMMARY ===")
@@ -337,6 +408,11 @@ def main() -> int:
     if s["golden_gate_fail"]:
         print(f"  golden gate FAIL:    {s['golden_gate_fail']}")
     print(f"  tasks w/ authored false-accepts caught: {s['tasks_with_false_accepts']}")
+    if s["content_tasks_classified_out"]:
+        print(f"content-creation tasks classified out ({len(s['content_tasks_classified_out'])}): "
+              f"{s['content_tasks_classified_out']}")
+    if s["criteria_from_cache"]:
+        print(f"criteria reused from cache (no model): {len(s['criteria_from_cache'])}")
     if s["decompose_error"]:
         print(f"decompose failures ({len(s['decompose_error'])}): {s['decompose_error']}")
     if s["skipped"]:
