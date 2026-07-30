@@ -308,14 +308,20 @@ def run(task_ids: list[str], *, model: str, supplied: dict, backend: str,
                 report = validate(tid, criteria, app_name="vscode",
                                   env_backend=backend, malformed=malformed)
                 rec["stage"] = "validated"
-                rec["golden_gate"] = report["golden"]["GATE"]
+                gate = report["golden"]["GATE"]
+                rec["golden_gate"] = gate
                 rec["authored"] = (f'{report["golden"]["authored"]["passed"]}/'
                                    f'{report["golden"]["authored"]["total"]}')
                 rec["our_fail"] = report["golden"]["our_fail"]
                 rec["honeypots_ok"] = report["honeypots_all_ok"]
-                rec["false_accepts"] = [
+                # A false-accept is only meaningful when the golden is fully
+                # correct (gate=True). If the golden itself fails the authored
+                # verifier, the honeypot comparison is noise — a tampered state
+                # can even "outscore" a broken golden. Only report when gate holds.
+                rec["false_accepts"] = ([
                     {"kind": h["kind"], "target": h["target"], "authored": h["authored_score"]}
                     for h in report["honeypots"] if h["false_accept_in_authored"]]
+                    if gate else [])
             except Exception as exc:  # noqa: BLE001
                 rec["stage"] = "validate_error"
                 rec["error"] = f"{type(exc).__name__}: {exc}"
