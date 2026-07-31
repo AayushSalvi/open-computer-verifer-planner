@@ -217,6 +217,49 @@ def explain(task_id: str, criteria: list) -> None:
         print("\nFAMILY: every authored op-kind has a produced checkpoint.")
 
 
+def decompose_only(task_ids: list[str], *, model: str, cache_path: Path,
+                   refresh: bool = False) -> dict:
+    """Fill the decomposition cache and nothing else — model only, no sandboxes.
+
+    Decompose is a tiny workload (~one short call per task) but the shared
+    endpoint is flaky, so separate it from the heavy, deterministic validation:
+    run this whenever the endpoint is healthy to capture criteria once, then
+    validate offline from the cache without touching the model again. Re-runnable;
+    already-cached tasks are skipped unless --refresh-decomp."""
+    cache: dict[str, list] = {}
+    if cache_path.exists():
+        for line in cache_path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                cache[r["task_id"]] = r["criteria"]
+    cache_fh = cache_path.open("a", encoding="utf-8")
+
+    have, new, errors = [], [], []
+    try:
+        for tid in task_ids:
+            if not refresh and tid in cache:
+                have.append(tid)
+                print(f"  [cached] {tid}", flush=True)
+                continue
+            try:
+                task = _load_task(tid)
+                criteria = decompose(task.get("task", ""), model=model)
+            except Exception as exc:  # noqa: BLE001
+                errors.append({"task": tid, "error": f"{type(exc).__name__}: {exc}"})
+                print(f"  [error]  {tid}: {str(exc)[:70]}", flush=True)
+                continue
+            cache[tid] = criteria
+            cache_fh.write(json.dumps({"task_id": tid, "criteria": criteria}) + "\n")
+            cache_fh.flush()
+            new.append(tid)
+            print(f"  [captured] {tid} ({len(criteria)} criteria)", flush=True)
+    finally:
+        cache_fh.close()
+
+    return {"already_cached": have, "newly_captured": new, "errors": errors,
+            "cache_total": len(cache), "cache_path": str(cache_path)}
+
+
 def _emit(fh, rec: dict, latest: dict) -> None:
     fh.write(json.dumps(rec) + "\n")
     fh.flush()
@@ -369,6 +412,9 @@ def main() -> int:
                         "next run — decouples the sweep from the flaky shared model")
     p.add_argument("--refresh-decomp", action="store_true",
                    help="ignore the cache and re-decompose live")
+    p.add_argument("--decompose-only", action="store_true",
+                   help="only fill the decomposition cache (model, no sandboxes); "
+                        "run in a healthy endpoint window, then validate offline")
     p.add_argument("--validate-content", action="store_true",
                    help="also validate content-creation tasks (default: classified out)")
     p.add_argument("--explain", metavar="TASK",
@@ -393,6 +439,21 @@ def main() -> int:
     if unknown:
         print(f"WARNING: {len(unknown)} unknown task id(s) will be skipped: {unknown}", flush=True)
         task_ids = [t for t in task_ids if t in known]
+
+    if a.decompose_only:
+        cache_path = Path(a.decomp_cache)
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"decompose-only: filling cache for {len(task_ids)} task(s) -> {cache_path}\n", flush=True)
+        r = decompose_only(task_ids, model=a.model, cache_path=cache_path, refresh=a.refresh_decomp)
+        print(f"\ncache now holds {r['cache_total']} task(s): "
+              f"{len(r['newly_captured'])} new, {len(r['already_cached'])} already, "
+              f"{len(r['errors'])} still failing")
+        if r["errors"]:
+            print("still failing (re-run in a healthy window):")
+            for e in r["errors"]:
+                print(f"    {e['task']}: {e['error'][:70]}")
+        return 0
+
     supplied = _load_decomps(a.decompositions)
     out_jsonl = Path(a.out)
     out_jsonl.parent.mkdir(parents=True, exist_ok=True)
